@@ -142,7 +142,13 @@ function Home() {
             <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">
               {query.trim() ? `Results for "${query}"` : "Trending now"}
             </h2>
-            {results.length === 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <SongCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : results.length === 0 ? (
               <div className="glass rounded-3xl p-10 text-center text-muted-foreground">
                 No tracks found. Try a different search.
               </div>
@@ -156,6 +162,7 @@ function Home() {
           </motion.section>
         </div>
       </main>
+
       <DownloadModal
         open={!!downloadFor}
         onClose={() => setDownloadFor(null)}
