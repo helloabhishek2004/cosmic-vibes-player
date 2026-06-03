@@ -1,10 +1,13 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowLeft, Download } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Starfield } from "@/components/Starfield";
+import { Meteors } from "@/components/Meteors";
 import { DownloadModal } from "@/components/DownloadModal";
+import { stop as stopAudio } from "@/lib/audio-player";
 import { songs } from "@/data/songs";
+
 
 export const Route = createFileRoute("/song/$id")({
   loader: ({ params }) => {
@@ -28,12 +31,16 @@ function SongPage() {
   const song = Route.useLoaderData();
   const [open, setOpen] = useState(false);
 
+  useEffect(() => () => stopAudio(), []);
+
   return (
     <>
       <Starfield />
+      <Meteors count={8} />
       <div
         aria-hidden
         className="fixed inset-0 -z-10"
+
         style={{
           backgroundImage: `url(${song.thumbnailUrl})`,
           backgroundSize: "cover",

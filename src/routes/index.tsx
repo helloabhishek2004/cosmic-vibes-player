@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mic, Search } from "lucide-react";
 import { Starfield } from "@/components/Starfield";
+import { Meteors } from "@/components/Meteors";
+import { Doodles } from "@/components/Doodles";
 import { SongCard } from "@/components/SongCard";
+import { SongCardSkeleton } from "@/components/SongCardSkeleton";
 import { DownloadModal } from "@/components/DownloadModal";
+import { stop as stopAudio } from "@/lib/audio-player";
 import { songs, type Song } from "@/data/songs";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,6 +28,14 @@ function Home() {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [downloadFor, setDownloadFor] = useState<Song | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => () => stopAudio(), []);
 
   const matches = useMemo(() => {
     if (!query.trim()) return [];
@@ -36,12 +49,15 @@ function Home() {
     );
   }, [query]);
 
+
   const suggestions = useMemo(() => matches.slice(0, 5), [matches]);
   const results = query.trim() ? matches : songs;
 
   return (
     <>
       <Starfield />
+      <Meteors />
+      <Doodles />
       <main className="min-h-dvh px-4 py-12 md:py-20">
         <div className="max-w-6xl mx-auto">
           <motion.div
@@ -50,13 +66,14 @@ function Home() {
             transition={{ duration: 0.6 }}
             className="text-center mb-10"
           >
-            <h1 className="font-display text-6xl md:text-8xl font-extrabold gradient-text tracking-tight">
+            <h1 className="title-glow font-display text-6xl md:text-8xl font-extrabold gradient-text tracking-tight inline-block">
               dua.mp3
             </h1>
             <p className="mt-4 text-lg md:text-xl text-muted-foreground">
               Search. Discover. Download.
             </p>
           </motion.div>
+
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -125,7 +142,13 @@ function Home() {
             <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">
               {query.trim() ? `Results for "${query}"` : "Trending now"}
             </h2>
-            {results.length === 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <SongCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : results.length === 0 ? (
               <div className="glass rounded-3xl p-10 text-center text-muted-foreground">
                 No tracks found. Try a different search.
               </div>
@@ -139,6 +162,7 @@ function Home() {
           </motion.section>
         </div>
       </main>
+
       <DownloadModal
         open={!!downloadFor}
         onClose={() => setDownloadFor(null)}
