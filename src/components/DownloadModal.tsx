@@ -1,46 +1,142 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { X, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
+import client from "@/api/client";
+import { toast } from "sonner";
 
-type Stage = "fetching" | "converting" | "ready" | "done";
+type Stage = "queued" | "processing" | "done" | "failed";
 
 export function DownloadModal({
   open,
   onClose,
   songTitle,
+  videoId,
 }: {
   open: boolean;
   onClose: () => void;
   songTitle: string;
+  videoId: string;
 }) {
-  const [stage, setStage] = useState<Stage>("fetching");
+  const [stage, setStage] = useState<Stage>("queued");
   const [progress, setProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState("");
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startDownload = async () => {
+    if (!videoId) return;
+
+    setStage("queued");
+    setProgress(0);
+    setErrorMsg("");
+
+    try {
+      console.log(`[Frontend] Requesting download for ${videoId}`);
+      const response = await client.post("/api/download", {
+        videoId,
+        title: songTitle,
+      });
+
+      const { jobId } = response.data;
+      if (!jobId) {
+        throw new Error("No Job ID returned from server.");
+      }
+
+      // Start Polling status
+      pollStatus(jobId);
+    } catch (err: any) {
+      console.error("[Frontend] Download request failed:", err);
+      const message = err.response?.data?.error || "Download service unavailable. Make sure Redis and backend are running.";
+      handleFailure(message);
+    }
+  };
+
+  const pollStatus = (jobId: string) => {
+    // Clear any existing poll first
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(async () => {
+      try {
+        const response = await client.get(`/api/status/${jobId}`);
+        const { status, progress: jobProgress, error } = response.data;
+
+        if (status === "queued") {
+          setStage("queued");
+          setProgress(0);
+        } else if (status === "processing") {
+          setStage("processing");
+          setProgress(jobProgress || 0);
+        } else if (status === "done") {
+          setStage("done");
+          setProgress(100);
+          cleanupPoll();
+          triggerFileDownload(jobId);
+        } else if (status === "failed") {
+          cleanupPoll();
+          handleFailure(error || "Conversion failed.");
+        }
+      } catch (err: any) {
+        console.error("[Frontend] Polling status failed:", err);
+      }
+    }, 1500);
+  };
+
+  const triggerFileDownload = async (jobId: string) => {
+    try {
+      console.log(`[Frontend] Triggering file transmission for job: ${jobId}`);
+      const res = await client.get(`/api/file/${jobId}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${songTitle}.mp3`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("[Frontend] File streaming failed:", err);
+      toast.error("Failed to stream audio file from server.");
+    }
+  };
+
+  const handleFailure = (message: string) => {
+    setStage("failed");
+    setErrorMsg(message);
+    
+    // Trigger red toast notification with a retry button action
+    toast.error(message, {
+      duration: 8000,
+      action: {
+        label: "Retry",
+        onClick: () => {
+          startDownload();
+        },
+      },
+    });
+  };
+
+  const cleanupPoll = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
-    if (!open) return;
-    setStage("fetching");
-    setProgress(0);
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.random() * 12 + 4;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
-        setProgress(100);
-        setStage("ready");
-        setTimeout(() => setStage("done"), 600);
-      } else {
-        setProgress(p);
-        if (p > 60) setStage("converting");
-      }
-    }, 220);
-    return () => clearInterval(interval);
-  }, [open]);
+    if (open) {
+      startDownload();
+    } else {
+      cleanupPoll();
+    }
+    return () => cleanupPoll();
+  }, [open, videoId]);
 
   useEffect(() => {
     if (stage === "done") {
       const t = setTimeout(onClose, 2400);
-      return () => clearTimeout(t);
+      return () => {
+        clearTimeout(t);
+        cleanupPoll();
+      };
     }
   }, [stage, onClose]);
 
@@ -58,7 +154,7 @@ export function DownloadModal({
         >
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-md"
-            onClick={stage === "done" ? onClose : undefined}
+            onClick={stage === "done" || stage === "failed" ? onClose : undefined}
           />
           <motion.div
             className="glass relative rounded-3xl p-8 w-full max-w-md text-center"
@@ -75,15 +171,22 @@ export function DownloadModal({
               <X size={18} />
             </button>
 
-            {stage !== "done" ? (
+            {stage === "queued" && (
+              <>
+                <Loader2 className="mx-auto mb-4 animate-spin text-[color:var(--violet)]" size={40} />
+                <h2 className="text-2xl font-bold mb-2">Preparing Download</h2>
+                <p className="text-muted-foreground text-sm mb-6 truncate">{songTitle}</p>
+                <p className="text-sm text-muted-foreground italic">Getting your song ready...</p>
+              </>
+            )}
+
+            {stage === "processing" && (
               <>
                 <h2 className="text-2xl font-bold mb-2">Downloading</h2>
                 <p className="text-muted-foreground text-sm mb-6 truncate">{songTitle}</p>
 
                 <div className="flex justify-between text-xs uppercase tracking-wider mb-3 text-muted-foreground">
-                  <span className={stage === "fetching" ? "text-white" : ""}>Fetching</span>
-                  <span className={stage === "converting" ? "text-white" : ""}>Converting</span>
-                  <span className={stage === "ready" ? "text-white" : ""}>Ready</span>
+                  <span className="text-white font-medium">Processing</span>
                 </div>
                 <div className="h-2 rounded-full bg-white/5 overflow-hidden">
                   <motion.div
@@ -94,7 +197,26 @@ export function DownloadModal({
                 </div>
                 <p className="mt-4 text-sm text-muted-foreground">{Math.floor(progress)}%</p>
               </>
-            ) : (
+            )}
+
+            {stage === "failed" && (
+              <>
+                <AlertCircle className="mx-auto mb-4 text-red-500" size={40} />
+                <h2 className="text-2xl font-bold mb-2 text-red-400">Download Failed</h2>
+                <p className="text-muted-foreground text-sm mb-4 truncate">{songTitle}</p>
+                <div className="glass rounded-xl p-3 bg-red-950/20 border border-red-500/20 text-xs text-red-300 mb-6 max-h-24 overflow-y-auto">
+                  {errorMsg}
+                </div>
+                <button
+                  onClick={startDownload}
+                  className="w-full py-3 rounded-full bg-white/10 hover:bg-white/20 font-medium inline-flex items-center justify-center gap-2 transition"
+                >
+                  <RefreshCw size={16} /> Retry Download
+                </button>
+              </>
+            )}
+
+            {stage === "done" && (
               <SuccessView title={songTitle} />
             )}
           </motion.div>

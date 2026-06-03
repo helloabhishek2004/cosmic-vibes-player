@@ -12,6 +12,18 @@ import { stop as stopAudio } from "@/lib/audio-player";
 import { songs, type Song } from "@/data/songs";
 
 
+import client from "@/api/client";
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return hash;
+}
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -26,32 +38,76 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [results, setResults] = useState<Song[]>(songs);
+  const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(false);
   const [downloadFor, setDownloadFor] = useState<Song | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(t);
-  }, []);
-
+  // Stop audio on unmount
   useEffect(() => () => stopAudio(), []);
 
-  const matches = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return songs.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) ||
-        s.artist.toLowerCase().includes(q) ||
-        s.album.toLowerCase().includes(q) ||
-        s.genre.some((g) => g.toLowerCase().includes(q))
-    );
+  // Debounce query
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setDebouncedQuery("");
+      setResults(songs);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const handler = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 400);
+
+    return () => clearTimeout(handler);
   }, [query]);
 
+  // Fetch results from backend Express API
+  useEffect(() => {
+    if (!debouncedQuery) {
+      setResults(songs);
+      setLoading(false);
+      return;
+    }
 
-  const suggestions = useMemo(() => matches.slice(0, 5), [matches]);
-  const results = query.trim() ? matches : songs;
+    let active = true;
+    const fetchResults = async () => {
+      try {
+        const response = await client.get(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
+        if (active) {
+          const mapped: Song[] = (response.data || []).map((item: any) => ({
+            id: item.videoId,
+            title: item.title,
+            artist: item.artist,
+            album: item.album || "Single",
+            duration: item.duration || "0:00",
+            year: item.year || new Date().getFullYear(),
+            genre: ["Music"],
+            thumbnailUrl: item.thumbnail || "https://picsum.photos/seed/music/600/600",
+            previewUrl: `http://localhost:3001/api/stream/${item.videoId}`
+          }));
+          setResults(mapped);
+        }
+      } catch (err) {
+        console.error("Search API failed:", err);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchResults();
+
+    return () => {
+      active = false;
+    };
+  }, [debouncedQuery]);
+
+  const suggestions = useMemo(() => results.slice(0, 5), [results]);
+
 
   return (
     <>
@@ -142,9 +198,9 @@ function Home() {
             <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">
               {query.trim() ? `Results for "${query}"` : "Trending now"}
             </h2>
-            {loading ? (
+             {loading ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {Array.from({ length: 8 }).map((_, i) => (
+                {Array.from({ length: 3 }).map((_, i) => (
                   <SongCardSkeleton key={i} />
                 ))}
               </div>
@@ -167,6 +223,7 @@ function Home() {
         open={!!downloadFor}
         onClose={() => setDownloadFor(null)}
         songTitle={downloadFor ? `${downloadFor.title} — ${downloadFor.artist}` : ""}
+        videoId={downloadFor ? downloadFor.id : ""}
       />
     </>
   );

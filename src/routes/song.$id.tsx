@@ -6,14 +6,32 @@ import { Starfield } from "@/components/Starfield";
 import { Meteors } from "@/components/Meteors";
 import { DownloadModal } from "@/components/DownloadModal";
 import { stop as stopAudio } from "@/lib/audio-player";
-import { songs } from "@/data/songs";
-
+import { type Song } from "@/data/songs";
+import client from "@/api/client";
 
 export const Route = createFileRoute("/song/$id")({
-  loader: ({ params }) => {
-    const song = songs.find((s) => s.id === params.id);
-    if (!song) throw notFound();
-    return song;
+  loader: async ({ params }) => {
+    try {
+      const response = await client.get(`/api/song/${params.id}`);
+      const data = response.data;
+      if (!data) throw notFound();
+
+      const song: Song = {
+        id: data.videoId,
+        title: data.title,
+        artist: data.artist,
+        album: data.album || "Single",
+        duration: data.duration || "0:00",
+        year: data.year || new Date().getFullYear(),
+        genre: ["Music"],
+        thumbnailUrl: data.thumbnail || "https://picsum.photos/seed/music/600/600",
+        previewUrl: `http://localhost:3001/api/stream/${data.videoId}`
+      };
+      return song;
+    } catch (err) {
+      console.error("Failed to load song metadata from API:", err);
+      throw notFound();
+    }
   },
   head: ({ loaderData }) => ({
     meta: [
@@ -106,6 +124,7 @@ function SongPage() {
         open={open}
         onClose={() => setOpen(false)}
         songTitle={`${song.title} — ${song.artist}`}
+        videoId={song.id}
       />
     </>
   );

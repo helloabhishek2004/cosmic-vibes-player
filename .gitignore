@@ -30,3 +30,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Backend and python temporary files
+.env
+/downloads/
+backend/downloads/
+backend/.env
+__pycache__/
+*.pyc
+

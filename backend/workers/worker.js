@@ -1,0 +1,41 @@
+import { downloadQueue } from "../services/queue.js";
+import { downloadAudio } from "../services/ytdlp.js";
+import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// Determine downloads folder absolute path (making sure to use path.join for Windows compatibility)
+const rawDownloadDir = process.env.DOWNLOAD_DIR || "downloads";
+const DOWNLOAD_DIR = path.isAbsolute(rawDownloadDir)
+  ? rawDownloadDir
+  : path.join(process.cwd(), rawDownloadDir);
+
+const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "3", 10);
+
+console.log(`[Worker] Initializing download worker. Max concurrency: ${MAX_CONCURRENT_JOBS}`);
+console.log(`[Worker] Target downloads directory: ${DOWNLOAD_DIR}`);
+
+if (downloadQueue) {
+  downloadQueue.process(MAX_CONCURRENT_JOBS, async (job) => {
+    const { videoId, title } = job.data;
+    console.log(`[Worker] Starting job ${job.id} for: ${title} (${videoId})`);
+
+    try {
+      // Call the yt-dlp downloader helper
+      const finalPath = await downloadAudio(videoId, DOWNLOAD_DIR, (progress) => {
+        job.progress(progress);
+      });
+
+      console.log(`[Worker] Completed job ${job.id}. File saved to: ${finalPath}`);
+      return finalPath;
+    } catch (err) {
+      console.error(`[Worker] Error processing job ${job.id}: ${err.message}`);
+      throw err;
+    }
+  });
+} else {
+  console.error("[Worker] Download queue is not initialized. Worker cannot start.");
+}
+
+export { DOWNLOAD_DIR };
