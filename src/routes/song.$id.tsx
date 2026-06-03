@@ -71,7 +71,7 @@ function SongPage() {
               <p className="text-xl text-muted-foreground mt-2">{song.artist}</p>
 
               <div className="flex flex-wrap gap-2 mt-5">
-                {song.genre.map((g) => (
+                {song.genre.map((g: string) => (
                   <span key={g} className="text-xs glass rounded-full px-3 py-1">{g}</span>
                 ))}
               </div>
