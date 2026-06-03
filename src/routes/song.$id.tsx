@@ -1,10 +1,13 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { ArrowLeft, Download } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Starfield } from "@/components/Starfield";
+import { Meteors } from "@/components/Meteors";
 import { DownloadModal } from "@/components/DownloadModal";
+import { stop as stopAudio } from "@/lib/audio-player";
 import { songs } from "@/data/songs";
+
 
 export const Route = createFileRoute("/song/$id")({
   loader: ({ params }) => {
