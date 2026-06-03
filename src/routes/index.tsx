@@ -1,11 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mic, Search } from "lucide-react";
 import { Starfield } from "@/components/Starfield";
+import { Meteors } from "@/components/Meteors";
+import { Doodles } from "@/components/Doodles";
 import { SongCard } from "@/components/SongCard";
+import { SongCardSkeleton } from "@/components/SongCardSkeleton";
 import { DownloadModal } from "@/components/DownloadModal";
+import { stop as stopAudio } from "@/lib/audio-player";
 import { songs, type Song } from "@/data/songs";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
