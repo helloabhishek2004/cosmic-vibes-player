@@ -28,6 +28,14 @@ function Home() {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [downloadFor, setDownloadFor] = useState<Song | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => () => stopAudio(), []);
 
   const matches = useMemo(() => {
     if (!query.trim()) return [];
@@ -40,6 +48,7 @@ function Home() {
         s.genre.some((g) => g.toLowerCase().includes(q))
     );
   }, [query]);
+
 
   const suggestions = useMemo(() => matches.slice(0, 5), [matches]);
   const results = query.trim() ? matches : songs;
