@@ -56,6 +56,8 @@ function Home() {
   return (
     <>
       <Starfield />
+      <Meteors />
+      <Doodles />
       <main className="min-h-dvh px-4 py-12 md:py-20">
         <div className="max-w-6xl mx-auto">
           <motion.div
@@ -64,13 +66,14 @@ function Home() {
             transition={{ duration: 0.6 }}
             className="text-center mb-10"
           >
-            <h1 className="font-display text-6xl md:text-8xl font-extrabold gradient-text tracking-tight">
+            <h1 className="title-glow font-display text-6xl md:text-8xl font-extrabold gradient-text tracking-tight inline-block">
               dua.mp3
             </h1>
             <p className="mt-4 text-lg md:text-xl text-muted-foreground">
               Search. Discover. Download.
             </p>
           </motion.div>
+
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}
