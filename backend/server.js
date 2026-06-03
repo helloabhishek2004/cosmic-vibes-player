@@ -5,9 +5,9 @@ import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
-import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { spawnYtDlp } from "./services/ytdlpSpawn.js";
 
 // Load environment variables
 dotenv.config();
@@ -15,19 +15,19 @@ dotenv.config();
 // Verify yt-dlp installation at server startup
 function checkYtdlp() {
   console.log("[System Check] Checking if yt-dlp is installed...");
-  const child = spawn("yt-dlp", ["--version"], { shell: true });
+  const child = spawnYtDlp(["--version"]);
   
   child.stdout.on("data", (data) => {
     console.log(`[System Check] yt-dlp is installed. Version: ${data.toString().trim()}`);
   });
   
   child.on("error", (err) => {
-    console.error("[System ERROR] yt-dlp not found in system PATH. Download features will fail.");
-    console.error("Please run: pip install yt-dlp");
+    console.error("[System ERROR] yt-dlp not available via Python. Download features will fail.");
+    console.error("Please run: python -m pip install yt-dlp");
   });
   
   // Try running update check as a background non-blocking check
-  const updateChild = spawn("yt-dlp", ["-U"], { shell: true });
+  const updateChild = spawnYtDlp(["-U"]);
   updateChild.stdout.on("data", (data) => {
     console.log(`[System Check] yt-dlp update status: ${data.toString().trim()}`);
   });
@@ -53,8 +53,12 @@ function isAllowedDevOrigin(origin) {
   return false;
 }
 
-// Middlewares
-app.use(helmet());
+// Allow cross-origin <audio> / fetch from the Vite dev server (different port).
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
 app.use(compression());
 app.use(
   cors({
@@ -80,7 +84,8 @@ const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   message: { error: "Too many requests from this IP, please try again after 15 minutes." }
 });
-app.use("/api/", apiLimiter);
+app.use("/api/download", apiLimiter);
+app.use("/api/file", apiLimiter);
 
 // Import Queue and worker to boot up the worker processes
 import { downloadQueue } from "./services/queue.js";
@@ -94,8 +99,10 @@ import downloadRouter from "./routes/download.js";
 import statusRouter from "./routes/status.js";
 import fileRouter from "./routes/file.js";
 import streamRouter from "./routes/stream.js";
+import trendingRouter from "./routes/trending.js";
 
 app.use("/api/search", searchRouter);
+app.use("/api/trending", trendingRouter);
 app.use("/api/song", songRouter);
 app.use("/api/download", downloadRouter);
 app.use("/api/status", statusRouter);

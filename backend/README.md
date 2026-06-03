@@ -60,7 +60,7 @@ If you prefer running them in separate terminal windows:
 1. **Python Metadata Service**:
    ```bash
    cd python
-   uvicorn metadata:app --port 8001
+   python -m uvicorn metadata:app --port 8001
    ```
 
 2. **Express API Server**:

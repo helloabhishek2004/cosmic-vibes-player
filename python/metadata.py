@@ -35,61 +35,85 @@ def parse_duration_seconds(seconds_str):
     except (ValueError, TypeError):
         return None
 
+
+def map_track_item(item):
+    video_id = item.get("videoId")
+    if not video_id:
+        return None
+
+    artists_list = item.get("artists", [])
+    artist_name = ", ".join([a.get("name", "") for a in artists_list if a.get("name")])
+
+    album_info = item.get("album")
+    album_name = album_info.get("name", "Single") if album_info else "Single"
+
+    thumbnails = item.get("thumbnails", [])
+    thumbnail_url = thumbnails[-1].get("url", "") if thumbnails else ""
+
+    duration = item.get("duration")
+    if not duration and item.get("duration_seconds"):
+        duration = parse_duration_seconds(item.get("duration_seconds"))
+    if not duration:
+        duration = "0:00"
+
+    return {
+        "videoId": video_id,
+        "title": item.get("title", "Unknown Title"),
+        "artist": artist_name or "Unknown Artist",
+        "album": album_name,
+        "duration": duration,
+        "thumbnail": thumbnail_url,
+        "year": item.get("year"),
+    }
+
+
+def map_search_results(items, limit=20):
+    mapped = []
+    for item in items:
+        try:
+            row = map_track_item(item)
+            if row:
+                mapped.append(row)
+        except Exception as parse_error:
+            logger.warning(f"Failed to parse item: {parse_error}")
+    return mapped[:limit]
+
+
 @app.get("/search")
 def search(q: str = Query(..., min_length=1)):
     if not yt:
         raise HTTPException(status_code=503, detail="YTMusic client not initialized")
-    
+
     try:
         logger.info(f"Searching for: {q}")
-        results = yt.search(q, filter="songs", limit=10)
-        
-        if not results:
-            return []
-            
-        mapped_results = []
-        for item in results:
-            try:
-                video_id = item.get("videoId")
-                if not video_id:
-                    continue
-                
-                # Extract artist names
-                artists_list = item.get("artists", [])
-                artist_name = ", ".join([a.get("name", "") for a in artists_list if a.get("name")])
-                
-                # Extract album name
-                album_info = item.get("album")
-                album_name = album_info.get("name", "Single") if album_info else "Single"
-                
-                # Extract thumbnail (highest resolution)
-                thumbnails = item.get("thumbnails", [])
-                thumbnail_url = thumbnails[-1].get("url", "") if thumbnails else ""
-                
-                # Duration
-                duration = item.get("duration")
-                if not duration and item.get("duration_seconds"):
-                    duration = parse_duration_seconds(item.get("duration_seconds"))
-                if not duration:
-                    duration = "0:00"
-                
-                mapped_results.append({
-                    "videoId": video_id,
-                    "title": item.get("title", "Unknown Title"),
-                    "artist": artist_name or "Unknown Artist",
-                    "album": album_name,
-                    "duration": duration,
-                    "thumbnail": thumbnail_url,
-                    "year": item.get("year")
-                })
-            except Exception as parse_error:
-                logger.warning(f"Failed to parse search item: {parse_error}")
-                continue
-                
-        return mapped_results[:10]
-        
+        results = yt.search(q, filter="songs", limit=20)
+        return map_search_results(results or [], 20)
     except Exception as e:
         logger.error(f"Search API error: {e}")
+        return []
+
+
+@app.get("/trending")
+def trending(country: str = Query("US", min_length=2, max_length=2)):
+    if not yt:
+        raise HTTPException(status_code=503, detail="YTMusic client not initialized")
+
+    try:
+        logger.info(f"Fetching trending charts for: {country}")
+        charts = yt.get_charts(country)
+        video_charts = charts.get("videos") or []
+        if not video_charts:
+            return []
+
+        playlist_id = video_charts[0].get("playlistId")
+        if not playlist_id:
+            return []
+
+        playlist = yt.get_playlist(playlist_id, limit=20)
+        tracks = playlist.get("tracks") or []
+        return map_search_results(tracks, 20)
+    except Exception as e:
+        logger.error(f"Trending API error: {e}")
         return []
 
 @app.get("/song/{video_id}")

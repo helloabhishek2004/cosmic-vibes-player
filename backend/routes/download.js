@@ -1,6 +1,7 @@
 import express from "express";
 import { body, validationResult } from "express-validator";
 import { downloadQueue, isQueueReady } from "../services/queue.js";
+import { startLocalJob } from "../services/localJobs.js";
 
 const router = express.Router();
 
@@ -22,12 +23,15 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    if (!isQueueReady()) {
-      console.warn("[Download Queue] Redis connection is not ready. Rejecting request with 503.");
-      return res.status(503).json({ error: "Download service unavailable" });
-    }
-
     const { videoId, title } = req.body;
+
+    if (!isQueueReady()) {
+      console.warn(
+        "[Download Queue] Redis unavailable — using in-memory job (local dev).",
+      );
+      const jobId = startLocalJob(videoId, title);
+      return res.json({ jobId });
+    }
 
     try {
       console.log(`[Queue] Adding job for: ${title} (${videoId})`);

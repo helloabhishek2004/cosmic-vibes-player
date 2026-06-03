@@ -8,6 +8,7 @@ import { DownloadModal } from "@/components/DownloadModal";
 import { stop as stopAudio } from "@/lib/audio-player";
 import { type Song } from "@/data/songs";
 import client from "@/api/client";
+import { streamUrl } from "@/lib/api-base";
 
 export const Route = createFileRoute("/song/$id")({
   loader: async ({ params }) => {
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/song/$id")({
         year: data.year || new Date().getFullYear(),
         genre: ["Music"],
         thumbnailUrl: data.thumbnail || "https://picsum.photos/seed/music/600/600",
-        previewUrl: `http://localhost:3001/api/stream/${data.videoId}`
+        previewUrl: streamUrl(data.videoId),
       };
       return song;
     } catch (err) {
@@ -69,7 +70,7 @@ function SongPage() {
       />
       <div aria-hidden className="fixed inset-0 -z-10 bg-black/60" />
 
-      <main className="min-h-dvh px-4 py-8">
+      <main className="min-h-dvh px-4 py-8 pb-32">
         <div className="max-w-4xl mx-auto">
           <Link
             to="/"

@@ -1,28 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mic, Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { Starfield } from "@/components/Starfield";
 import { Meteors } from "@/components/Meteors";
 import { Doodles } from "@/components/Doodles";
-import { SongCard } from "@/components/SongCard";
-import { SongCardSkeleton } from "@/components/SongCardSkeleton";
 import { DownloadModal } from "@/components/DownloadModal";
-import { stop as stopAudio } from "@/lib/audio-player";
-import { songs, type Song } from "@/data/songs";
-
-
+import { LazySongGrid } from "@/components/LazySongGrid";
+import { stop } from "@/lib/audio-player";
+import { type Song } from "@/data/songs";
 import client from "@/api/client";
+import { mapApiTracks } from "@/lib/map-song";
 
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0;
-  }
-  return hash;
-}
+const SEARCH_DEBOUNCE_MS = 280;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,83 +28,98 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [results, setResults] = useState<Song[]>(songs);
+  const [results, setResults] = useState<Song[]>([]);
+  const [trending, setTrending] = useState<Song[]>([]);
   const [loading, setLoading] = useState(false);
+  const [trendingLoading, setTrendingLoading] = useState(true);
   const [focused, setFocused] = useState(false);
   const [downloadFor, setDownloadFor] = useState<Song | null>(null);
+  const searchAbort = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Stop audio on unmount
-  useEffect(() => () => stopAudio(), []);
+  const isSearching = query.trim().length >= 2;
+  const displayResults = isSearching ? results : trending;
+  const displayLoading = isSearching ? loading : trendingLoading;
 
-  // Debounce query
+  useEffect(() => () => stop(), []);
+
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setDebouncedQuery("");
-      setResults(songs);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    const handler = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 400);
-
-    return () => clearTimeout(handler);
-  }, [query]);
-
-  // Fetch results from backend Express API
-  useEffect(() => {
-    if (!debouncedQuery) {
-      setResults(songs);
-      setLoading(false);
-      return;
-    }
-
     let active = true;
-    const fetchResults = async () => {
+    (async () => {
       try {
-        const response = await client.get(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
-        if (active) {
-          const mapped: Song[] = (response.data || []).map((item: any) => ({
-            id: item.videoId,
-            title: item.title,
-            artist: item.artist,
-            album: item.album || "Single",
-            duration: item.duration || "0:00",
-            year: item.year || new Date().getFullYear(),
-            genre: ["Music"],
-            thumbnailUrl: item.thumbnail || "https://picsum.photos/seed/music/600/600",
-            previewUrl: `http://localhost:3001/api/stream/${item.videoId}`
-          }));
-          setResults(mapped);
-        }
+        const response = await client.get("/api/trending");
+        if (active) setTrending(mapApiTracks(response.data));
       } catch (err) {
-        console.error("Search API failed:", err);
+        console.error("Trending API failed:", err);
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setTrendingLoading(false);
       }
-    };
-
-    fetchResults();
-
+    })();
     return () => {
       active = false;
     };
-  }, [debouncedQuery]);
+  }, []);
 
-  const suggestions = useMemo(() => results.slice(0, 5), [results]);
+  const runSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
 
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
+    setLoading(true);
+
+    try {
+      const response = await client.get(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+        signal: controller.signal,
+      });
+      setResults(mapApiTracks(response.data));
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      console.error("Search API failed:", err);
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, []);
+
+  const scheduleSearch = useCallback(
+    (q: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      const trimmed = q.trim();
+      if (trimmed.length < 2) {
+        setResults([]);
+        setLoading(false);
+        searchAbort.current?.abort();
+        return;
+      }
+      setLoading(true);
+      debounceRef.current = setTimeout(() => runSearch(q), SEARCH_DEBOUNCE_MS);
+    },
+    [runSearch],
+  );
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    scheduleSearch(value);
+  };
+
+  const submitSearch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    void runSearch(query);
+  };
+
+  const suggestions = isSearching && !loading ? results.slice(0, 6) : [];
 
   return (
     <>
       <Starfield />
       <Meteors />
       <Doodles />
-      <main className="min-h-dvh px-4 py-12 md:py-20">
+      <main className="min-h-dvh px-4 py-12 md:py-20 pb-32">
         <div className="max-w-6xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -130,22 +135,25 @@ function Home() {
             </p>
           </motion.div>
 
-
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
             className="relative max-w-2xl mx-auto"
           >
-            <div
+            <form
               className="glass rounded-full flex items-center px-5 py-3 transition-shadow"
               style={focused ? { boxShadow: "0 0 0 2px #7B6FF0, var(--glow-violet)" } : undefined}
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSearch();
+              }}
             >
               <Search size={20} className="text-muted-foreground shrink-0" aria-hidden />
               <input
                 type="search"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setTimeout(() => setFocused(false), 150)}
                 placeholder="Search for songs, artists, albums…"
@@ -153,12 +161,13 @@ function Home() {
                 className="flex-1 bg-transparent outline-none px-4 text-base placeholder:text-muted-foreground"
               />
               <button
-                aria-label="Voice search"
-                className="p-2 rounded-full hover:bg-white/10 transition"
+                type="submit"
+                aria-label="Search"
+                className="p-2.5 rounded-full gradient-bg hover:opacity-90 transition shadow-md"
               >
-                <Mic size={18} />
+                <ArrowRight size={18} className="text-white" />
               </button>
-            </div>
+            </form>
 
             <AnimatePresence>
               {focused && suggestions.length > 0 && (
@@ -166,16 +175,25 @@ function Home() {
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
-                  className="absolute left-0 right-0 mt-2 glass rounded-2xl overflow-hidden z-20"
+                  className="absolute left-0 right-0 mt-2 glass rounded-2xl overflow-hidden z-20 max-h-72 overflow-y-auto"
                   role="listbox"
                 >
                   {suggestions.map((s) => (
                     <li key={s.id}>
                       <button
-                        onMouseDown={() => setQuery(s.title)}
+                        type="button"
+                        onMouseDown={() => {
+                          setQuery(s.title);
+                          void runSearch(s.title);
+                        }}
                         className="w-full text-left px-5 py-3 hover:bg-white/10 flex items-center gap-3 transition"
                       >
-                        <img src={s.thumbnailUrl} alt="" className="w-9 h-9 rounded-lg object-cover" />
+                        <img
+                          src={s.thumbnailUrl}
+                          alt=""
+                          className="w-9 h-9 rounded-lg object-cover"
+                          loading="lazy"
+                        />
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{s.title}</p>
                           <p className="text-xs text-muted-foreground truncate">{s.artist}</p>
@@ -196,25 +214,14 @@ function Home() {
             aria-label="Search results"
           >
             <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">
-              {query.trim() ? `Results for "${query}"` : "Trending now"}
+              {isSearching ? `Results for "${query.trim()}"` : "Trending on YouTube"}
             </h2>
-             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <SongCardSkeleton key={i} />
-                ))}
-              </div>
-            ) : results.length === 0 ? (
-              <div className="glass rounded-3xl p-10 text-center text-muted-foreground">
-                No tracks found. Try a different search.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {results.map((song) => (
-                  <SongCard key={song.id} song={song} onDownload={setDownloadFor} />
-                ))}
-              </div>
-            )}
+            <LazySongGrid
+              songs={displayResults}
+              loading={displayLoading}
+              onDownload={setDownloadFor}
+              playlist={displayResults}
+            />
           </motion.section>
         </div>
       </main>

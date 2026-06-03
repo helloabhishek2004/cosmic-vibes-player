@@ -13,10 +13,9 @@ module.exports = {
     },
     {
       name: "dua-mp3-metadata",
-      script: "uvicorn",
-      args: "metadata:app --port 8001",
+      script: "python",
+      args: "-m uvicorn metadata:app --port 8001",
       cwd: "../python",
-      interpreter: "python",
       watch: true,
       ignore_watch: ["__pycache__"]
     }

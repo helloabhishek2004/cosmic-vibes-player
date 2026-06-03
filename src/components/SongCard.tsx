@@ -3,15 +3,23 @@ import { Link } from "@tanstack/react-router";
 import { Download, Loader2, Pause, Play } from "lucide-react";
 import { useState } from "react";
 import type { Song } from "@/data/songs";
-import { toggle, usePlayback } from "@/lib/audio-player";
+import { toggleTrack, usePlayback } from "@/lib/audio-player";
 
-export function SongCard({ song, onDownload }: { song: Song; onDownload: (s: Song) => void }) {
+export function SongCard({
+  song,
+  onDownload,
+  playlist,
+}: {
+  song: Song;
+  onDownload: (s: Song) => void;
+  playlist?: Song[];
+}) {
   const { active, status } = usePlayback(song.id);
   const [loaded, setLoaded] = useState(false);
 
   const handlePlay = (e: React.MouseEvent) => {
     e.preventDefault();
-    toggle(song.id, song.previewUrl);
+    toggleTrack(song, playlist);
   };
 
   return (

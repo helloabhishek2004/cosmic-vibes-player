@@ -1,6 +1,7 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
 import { downloadQueue, isQueueReady } from "../services/queue.js";
+import { getLocalJobStatus, isLocalJob } from "../services/localJobs.js";
 
 const router = express.Router();
 
@@ -18,11 +19,19 @@ router.get(
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const { jobId } = req.params;
+
+    if (isLocalJob(jobId)) {
+      const local = getLocalJobStatus(jobId);
+      if (!local) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      return res.json(local);
+    }
+
     if (!isQueueReady()) {
       return res.status(503).json({ error: "Download service unavailable" });
     }
-
-    const { jobId } = req.params;
 
     try {
       const job = await downloadQueue.getJob(jobId);

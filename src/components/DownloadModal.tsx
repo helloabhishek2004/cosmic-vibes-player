@@ -89,7 +89,8 @@ export function DownloadModal({
       const url = window.URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${songTitle}.mp3`;
+      const ext = res.headers["content-type"]?.includes("webm") ? ".webm" : ".m4a";
+      a.download = `${songTitle}${ext}`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {

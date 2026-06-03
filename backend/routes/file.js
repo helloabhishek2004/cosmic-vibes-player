@@ -3,6 +3,38 @@ import { param, validationResult } from "express-validator";
 import fs from "fs";
 import path from "path";
 import { downloadQueue, isQueueReady } from "../services/queue.js";
+import {
+  deleteLocalJob,
+  getLocalJobFile,
+  isLocalJob,
+} from "../services/localJobs.js";
+
+const MIME_BY_EXT = {
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".webm": "audio/webm",
+  ".opus": "audio/ogg",
+};
+
+function sendAudioFile(res, filePath, title, onComplete) {
+  const ext = path.extname(filePath).toLowerCase();
+  const safeTitle = (title || "audio").replace(/"/g, "'");
+  const encodedTitle = encodeURIComponent(safeTitle);
+  const filename = `${safeTitle}${ext || ".m4a"}`;
+
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${encodedTitle}${ext}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+  );
+  res.setHeader("Content-Type", MIME_BY_EXT[ext] || "application/octet-stream");
+
+  res.download(filePath, filename, (err) => {
+    if (err) {
+      console.error(`Error during file download stream for ${title}:`, err);
+    }
+    onComplete?.();
+  });
+}
 
 const router = express.Router();
 
@@ -20,11 +52,26 @@ router.get(
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const { jobId } = req.params;
+
+    if (isLocalJob(jobId)) {
+      const local = getLocalJobFile(jobId);
+      if (!local) {
+        return res.status(410).json({ error: "File not ready or expired" });
+      }
+      return sendAudioFile(res, local.filePath, local.title, () => {
+        try {
+          if (fs.existsSync(local.filePath)) fs.unlinkSync(local.filePath);
+        } catch {
+          /* ignore */
+        }
+        deleteLocalJob(jobId);
+      });
+    }
+
     if (!isQueueReady()) {
       return res.status(503).json({ error: "Download service unavailable" });
     }
-
-    const { jobId } = req.params;
 
     try {
       const job = await downloadQueue.getJob(jobId);
@@ -44,30 +91,10 @@ router.get(
       }
 
       const title = job.data.title || "audio";
-      // Clean title for filename header (replace double quotes and normalize)
-      const safeTitle = title.replace(/"/g, "'");
-      const encodedTitle = encodeURIComponent(safeTitle);
-
-      // Support UTF-8 encoded filename for special characters
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${encodedTitle}.mp3"; filename*=UTF-8''${encodedTitle}.mp3`
-      );
-      res.setHeader("Content-Type", "audio/mpeg");
-
       console.log(`[Stream] Starting download stream for: ${title} (${filePath})`);
-      res.download(filePath, `${safeTitle}.mp3`, (err) => {
-        if (err) {
-          console.error(`Error during file download stream for ${title}:`, err);
-        } else {
-          console.log(`[Stream] Download stream finished. Cleaning up file from disk: ${filePath}`);
-        }
-
-        // Always attempt deletion after transmission is completed or failed
+      sendAudioFile(res, filePath, title, () => {
         try {
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         } catch (unlinkErr) {
           console.error(`Failed to delete temp file ${filePath}:`, unlinkErr);
         }

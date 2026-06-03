@@ -1,6 +1,6 @@
 import express from "express";
-import { spawn } from "child_process";
 import { param, validationResult } from "express-validator";
+import { spawnYtDlp } from "../services/ytdlpSpawn.js";
 
 const router = express.Router();
 
@@ -21,28 +21,48 @@ router.get(
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // Set headers for audio streaming
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Transfer-Encoding", "chunked");
-
     console.log(`[Audio Stream] Streaming real-time audio for video: ${videoId}`);
 
-    // yt-dlp arguments: stream best audio, write to stdout (-)
+    // Prefer m4a for broader browser support; fall back to webm opus.
     const args = [
-      "-f", "bestaudio",
-      "-o", "-",
-      videoUrl
+      "-f",
+      "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+      "--no-playlist",
+      "-o",
+      "-",
+      videoUrl,
     ];
 
-    // spawn with shell: true for Windows executable resolution
-    const child = spawn("yt-dlp", args, { shell: true });
+    const child = spawnYtDlp(args);
+    let contentTypeSet = false;
 
-    // Pipe the stdout directly to the express response
-    child.stdout.pipe(res);
+    const setContentType = (line) => {
+      if (contentTypeSet) return;
+      if (/\.m4a|audio.?mp4/i.test(line)) {
+        res.setHeader("Content-Type", "audio/mp4");
+        contentTypeSet = true;
+      } else if (/\.webm|audio.?webm/i.test(line)) {
+        res.setHeader("Content-Type", "audio/webm");
+        contentTypeSet = true;
+      }
+    };
 
     child.stderr.on("data", (data) => {
-      // Log errors if necessary, but don't output to user
+      const text = data.toString();
+      setContentType(text);
+      if (/error|unable/i.test(text)) {
+        console.error(`[Audio Stream] yt-dlp: ${text.trim()}`);
+      }
     });
+
+    child.stdout.on("data", () => {
+      if (!contentTypeSet && !res.headersSent) {
+        res.setHeader("Content-Type", "audio/webm");
+        contentTypeSet = true;
+      }
+    });
+
+    child.stdout.pipe(res);
 
     child.on("close", (code) => {
       console.log(`[Audio Stream] Completed streaming with exit code ${code} for video: ${videoId}`);
