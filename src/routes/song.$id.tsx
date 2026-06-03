@@ -31,12 +31,16 @@ function SongPage() {
   const song = Route.useLoaderData();
   const [open, setOpen] = useState(false);
 
+  useEffect(() => () => stopAudio(), []);
+
   return (
     <>
       <Starfield />
+      <Meteors count={8} />
       <div
         aria-hidden
         className="fixed inset-0 -z-10"
+
         style={{
           backgroundImage: `url(${song.thumbnailUrl})`,
           backgroundSize: "cover",
