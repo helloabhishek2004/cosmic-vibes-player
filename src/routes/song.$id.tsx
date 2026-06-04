@@ -52,11 +52,24 @@ export const Route = createFileRoute("/song/$id")({
   ),
 });
 
+function formatTime(s: number) {
+  if (!Number.isFinite(s) || s < 0) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 function SongPage() {
   const song = Route.useLoaderData();
   const [open, setOpen] = useState(false);
+  const { active, status } = usePlayback(song.id);
+  const { currentTime, duration } = useAudioProgress();
 
   useEffect(() => () => stopAudio(), []);
+
+  const progress = active && duration > 0 ? (currentTime / duration) * 100 : 0;
+  const isPlaying = active && status === "playing";
+  const isLoading = active && status === "loading";
 
   return (
     <>
