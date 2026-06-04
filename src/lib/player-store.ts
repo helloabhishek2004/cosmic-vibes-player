@@ -45,6 +45,12 @@ function ensureAudio() {
         emit();
       }
     });
+    audio.addEventListener("seeking", () => {
+      emit();
+    });
+    audio.addEventListener("seeked", () => {
+      emit();
+    });
     audio.addEventListener("error", () => {
       console.error("[Player] Playback failed for", audio?.src);
       status = "idle";
@@ -189,4 +195,53 @@ export function usePlayback(id: string) {
     active: track?.id === id,
     status: track?.id === id ? s : ("idle" as PlaybackStatus),
   };
+}
+
+export function seek(time: number) {
+  const a = ensureAudio();
+  if (!isNaN(time) && isFinite(time)) {
+    a.currentTime = time;
+    emit();
+  }
+}
+
+export function getPlaybackPosition() {
+  return audio ? audio.currentTime : 0;
+}
+
+export function getDuration() {
+  return audio ? audio.duration : 0;
+}
+
+export function usePlaybackPosition() {
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const a = ensureAudio();
+    
+    const handleTimeUpdate = () => {
+      setPosition(a.currentTime);
+    };
+    
+    const handleLoadedMetadata = () => {
+      setDuration(a.duration);
+    };
+    
+    const handleDurationChange = () => {
+      setDuration(a.duration);
+    };
+
+    a.addEventListener("timeupdate", handleTimeUpdate);
+    a.addEventListener("loadedmetadata", handleLoadedMetadata);
+    a.addEventListener("durationchange", handleDurationChange);
+
+    return () => {
+      a.removeEventListener("timeupdate", handleTimeUpdate);
+      a.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      a.removeEventListener("durationchange", handleDurationChange);
+    };
+  }, []);
+
+  return { position, duration };
 }

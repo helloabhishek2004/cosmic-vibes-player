@@ -89,8 +89,12 @@ export function DownloadModal({
       const url = window.URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;
-      const ext = res.headers["content-type"]?.includes("webm") ? ".webm" : ".m4a";
-      a.download = `${songTitle}${ext}`;
+
+      const contentDisposition = res.headers["content-disposition"] || "";
+      const filenameMatch = contentDisposition.match(/filename\*?=(?:UTF-8''?)?"?([^";]+)/i);
+      const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `${songTitle}.mp3`;
+
+      a.download = filename;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
@@ -102,7 +106,7 @@ export function DownloadModal({
   const handleFailure = (message: string) => {
     setStage("failed");
     setErrorMsg(message);
-    
+
     // Trigger red toast notification with a retry button action
     toast.error(message, {
       duration: 8000,

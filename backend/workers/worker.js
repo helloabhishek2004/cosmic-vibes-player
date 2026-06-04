@@ -1,9 +1,20 @@
 import { downloadQueue } from "../services/queue.js";
 import { downloadAudio } from "../services/ytdlp.js";
+import metadataClient from "../services/metadataClient.js";
 import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+async function fetchTags(videoId) {
+  try {
+    const response = await metadataClient.get(`/song/${videoId}`);
+    return response.data;
+  } catch (err) {
+    console.warn(`[Worker] Metadata fetch failed for ${videoId}: ${err.message}`);
+    return null;
+  }
+}
 
 // Determine downloads folder absolute path (making sure to use path.join for Windows compatibility)
 const rawDownloadDir = process.env.DOWNLOAD_DIR || "downloads";
@@ -22,10 +33,16 @@ if (downloadQueue) {
     console.log(`[Worker] Starting job ${job.id} for: ${title} (${videoId})`);
 
     try {
-      // Call the yt-dlp downloader helper
-      const finalPath = await downloadAudio(videoId, DOWNLOAD_DIR, (progress) => {
-        job.progress(progress);
-      });
+      const metadata = await fetchTags(videoId);
+      // Call the yt-dlp downloader helper with explicit metadata tags.
+      const finalPath = await downloadAudio(
+        videoId,
+        DOWNLOAD_DIR,
+        (progress) => {
+          job.progress(progress);
+        },
+        metadata,
+      );
 
       console.log(`[Worker] Completed job ${job.id}. File saved to: ${finalPath}`);
       return finalPath;

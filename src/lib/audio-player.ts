@@ -10,4 +10,8 @@ export {
   playPrev,
   togglePlayPause,
   setQueue,
+  seek,
+  getPlaybackPosition,
+  getDuration,
+  usePlaybackPosition,
 } from "./player-store";

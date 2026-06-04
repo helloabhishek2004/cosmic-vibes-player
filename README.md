@@ -4,12 +4,12 @@ A cosmic-themed music search and download app. Search YouTube Music, preview tra
 
 ## What runs where
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Frontend (Vite + TanStack Start) | `5173` (default) | Web UI |
-| Express API | `3001` | Search, downloads, streaming |
-| Python metadata (FastAPI) | `8001` | YouTube Music metadata |
-| Redis | `6379` | Download job queue |
+| Service                          | Port             | Purpose                      |
+| -------------------------------- | ---------------- | ---------------------------- |
+| Frontend (Vite + TanStack Start) | `5173` (default) | Web UI                       |
+| Express API                      | `3001`           | Search, downloads, streaming |
+| Python metadata (FastAPI)        | `8001`           | YouTube Music metadata       |
+| Redis                            | `6379`           | Download job queue           |
 
 The frontend talks to the API at `http://<your-host>:3001`. On the same machine that is usually `http://localhost:3001`. When you open the app from another device on your Wi‑Fi, it uses your PC’s LAN IP automatically.
 
@@ -21,9 +21,18 @@ Install these before you start:
 - **Python** 3.10+
 - **Redis** — required for download jobs ([Memurai](https://www.memurai.com/) on Windows, or Redis via WSL/Docker)
 - **yt-dlp** — extracts audio from YouTube
+- **ffmpeg** — required for converting audio to MP3 and embedding metadata/cover art
 
 ```bash
 pip install yt-dlp
+```
+
+On Windows, install ffmpeg and make sure it is available on your PATH so yt-dlp can embed metadata and album artwork into the downloaded file.
+
+If ffmpeg is installed in a non-standard location, add this to your `backend/.env`:
+
+```env
+FFMPEG_LOCATION=C:\path\to\ffmpeg
 ```
 
 Confirm yt-dlp is installed (either command works):
@@ -116,14 +125,14 @@ Open the URL Vite prints (usually **http://localhost:5173**). The `--host` flag 
 
 ### Backend (`backend/.env`)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3001` | Express API port |
-| `PYTHON_SERVICE_URL` | `http://localhost:8001` | Metadata microservice |
-| `REDIS_URL` | `redis://localhost:6379` | Bull queue / Redis |
-| `DOWNLOAD_DIR` | `downloads` | Folder for finished MP3s |
-| `MAX_CONCURRENT_JOBS` | `3` | Parallel yt-dlp jobs |
-| `NODE_ENV` | `development` | Node environment |
+| Variable              | Default                  | Description              |
+| --------------------- | ------------------------ | ------------------------ |
+| `PORT`                | `3001`                   | Express API port         |
+| `PYTHON_SERVICE_URL`  | `http://localhost:8001`  | Metadata microservice    |
+| `REDIS_URL`           | `redis://localhost:6379` | Bull queue / Redis       |
+| `DOWNLOAD_DIR`        | `downloads`              | Folder for finished MP3s |
+| `MAX_CONCURRENT_JOBS` | `3`                      | Parallel yt-dlp jobs     |
+| `NODE_ENV`            | `development`            | Node environment         |
 
 ### Frontend (optional)
 
@@ -137,12 +146,12 @@ Use this when the API is not on the same host as the page (e.g. a remote backend
 
 ## Other scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Production build of the frontend |
-| `npm run preview` | Preview the production build |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format with Prettier |
+| Command           | Description                      |
+| ----------------- | -------------------------------- |
+| `npm run build`   | Production build of the frontend |
+| `npm run preview` | Preview the production build     |
+| `npm run lint`    | Run ESLint                       |
+| `npm run format`  | Format with Prettier             |
 
 ## Project layout
 
