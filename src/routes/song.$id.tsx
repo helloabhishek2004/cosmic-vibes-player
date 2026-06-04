@@ -1,11 +1,17 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Pause, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Starfield } from "@/components/Starfield";
 import { Meteors } from "@/components/Meteors";
 import { DownloadModal } from "@/components/DownloadModal";
-import { stop as stopAudio } from "@/lib/audio-player";
+import {
+  stop as stopAudio,
+  toggleTrack,
+  usePlayback,
+  useAudioProgress,
+  seek,
+} from "@/lib/audio-player";
 import { type Song } from "@/data/songs";
 import client from "@/api/client";
 import { streamUrl } from "@/lib/api-base";
