@@ -185,7 +185,9 @@ export function usePlayer() {
   useEffect(() => {
     const l = () => tick((n) => n + 1);
     listeners.add(l);
-    return () => listeners.delete(l);
+    return () => {
+      listeners.delete(l);
+    };
   }, []);
   return getPlayerSnapshot();
 }
