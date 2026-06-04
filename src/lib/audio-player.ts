@@ -10,4 +10,6 @@ export {
   playPrev,
   togglePlayPause,
   setQueue,
+  seek,
+  useAudioProgress,
 } from "./player-store";
