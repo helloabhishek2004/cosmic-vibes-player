@@ -126,12 +126,49 @@ function SongPage() {
                 <span>{song.year}</span>
               </div>
 
+              <div className="mt-6 glass rounded-2xl p-4 flex items-center gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.06 }}
+                  whileTap={{ scale: 0.94 }}
+                  onClick={() => toggleTrack(song)}
+                  aria-label={isPlaying ? `Pause ${song.title}` : `Play ${song.title}`}
+                  className="w-12 h-12 shrink-0 rounded-full gradient-bg flex items-center justify-center shadow-lg"
+                >
+                  {isLoading ? (
+                    <Loader2 size={20} className="text-white animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause size={20} fill="white" className="text-white" />
+                  ) : (
+                    <Play size={20} fill="white" className="text-white ml-0.5" />
+                  )}
+                </motion.button>
+
+                <div className="flex-1 min-w-0">
+                  <input
+                    type="range"
+                    min={0}
+                    max={active && duration > 0 ? duration : 100}
+                    step={0.1}
+                    value={active ? currentTime : 0}
+                    onChange={(e) => seek(Number(e.target.value))}
+                    aria-label="Seek"
+                    className="seek-bar w-full"
+                    style={{ ['--progress' as string]: `${progress}%` }}
+                    disabled={!active || duration === 0}
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1 tabular-nums">
+                    <span>{formatTime(active ? currentTime : 0)}</span>
+                    <span>{formatTime(active ? duration : 0)}</span>
+                  </div>
+                </div>
+              </div>
+
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setOpen(true)}
                 aria-label={`Download ${song.title}`}
-                className="mt-7 h-14 px-8 rounded-full gradient-bg text-white font-semibold inline-flex items-center gap-3 shadow-[0_10px_40px_-10px_rgba(123,111,240,0.8)]"
+                className="mt-5 h-14 px-8 rounded-full gradient-bg text-white font-semibold inline-flex items-center gap-3 shadow-[0_10px_40px_-10px_rgba(123,111,240,0.8)]"
               >
                 <Download size={20} /> Download MP3
               </motion.button>
