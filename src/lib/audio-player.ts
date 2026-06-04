@@ -14,4 +14,5 @@ export {
   getPlaybackPosition,
   getDuration,
   usePlaybackPosition,
+  useAudioProgress,
 } from "./player-store";

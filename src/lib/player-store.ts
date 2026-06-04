@@ -152,6 +152,29 @@ export function stop() {
   emit();
 }
 
+export function seek(time: number) {
+  const a = ensureAudio();
+  if (Number.isFinite(time)) a.currentTime = Math.max(0, time);
+}
+
+export function useAudioProgress() {
+  const [state, setState] = useState({ currentTime: 0, duration: 0 });
+  useEffect(() => {
+    const a = ensureAudio();
+    let raf = 0;
+    const loop = () => {
+      setState({
+        currentTime: a.currentTime || 0,
+        duration: Number.isFinite(a.duration) ? a.duration : 0,
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return state;
+}
+
 export function getPlayerSnapshot() {
   return {
     track: currentTrack(),
@@ -168,7 +191,9 @@ export function usePlayer() {
   useEffect(() => {
     const l = () => tick((n) => n + 1);
     listeners.add(l);
-    return () => listeners.delete(l);
+    return () => {
+      listeners.delete(l);
+    };
   }, []);
   return getPlayerSnapshot();
 }
