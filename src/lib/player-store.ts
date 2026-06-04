@@ -152,11 +152,6 @@ export function stop() {
   emit();
 }
 
-export function seek(time: number) {
-  const a = ensureAudio();
-  if (Number.isFinite(time)) a.currentTime = Math.max(0, time);
-}
-
 export function useAudioProgress() {
   const [state, setState] = useState({ currentTime: 0, duration: 0 });
   useEffect(() => {
