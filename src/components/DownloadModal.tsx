@@ -89,7 +89,11 @@ export function DownloadModal({
       const url = window.URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;
-      const ext = res.headers["content-type"]?.includes("webm") ? ".webm" : ".m4a";
+      // Normalize header value to a string before using includes()
+      // Axios may return a variety of header shapes; defensively coerce to string
+      const rawContentType = (res.headers as any)["content-type"] ?? (res.headers as any).get?.("content-type");
+      const contentType = typeof rawContentType === "string" ? rawContentType : String(rawContentType ?? "");
+      const ext = contentType.includes("webm") ? ".webm" : ".m4a";
       a.download = `${songTitle}${ext}`;
       a.click();
       window.URL.revokeObjectURL(url);
