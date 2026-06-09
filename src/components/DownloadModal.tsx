@@ -45,7 +45,9 @@ export function DownloadModal({
       pollStatus(jobId);
     } catch (err: any) {
       console.error("[Frontend] Download request failed:", err);
-      const message = err.response?.data?.error || "Download service unavailable. Make sure Redis and backend are running.";
+      const message =
+        err.response?.data?.error ||
+        "Download service unavailable. Make sure Redis and backend are running.";
       handleFailure(message);
     }
   };
@@ -91,8 +93,10 @@ export function DownloadModal({
       a.href = url;
       // Normalize header value to a string before using includes()
       // Axios may return a variety of header shapes; defensively coerce to string
-      const rawContentType = (res.headers as any)["content-type"] ?? (res.headers as any).get?.("content-type");
-      const contentType = typeof rawContentType === "string" ? rawContentType : String(rawContentType ?? "");
+      const rawContentType =
+        (res.headers as any)["content-type"] ?? (res.headers as any).get?.("content-type");
+      const contentType =
+        typeof rawContentType === "string" ? rawContentType : String(rawContentType ?? "");
       const ext = contentType.includes("webm") ? ".webm" : ".m4a";
       a.download = `${songTitle}${ext}`;
       a.click();
@@ -178,7 +182,10 @@ export function DownloadModal({
 
             {stage === "queued" && (
               <>
-                <Loader2 className="mx-auto mb-4 animate-spin text-[color:var(--violet)]" size={40} />
+                <Loader2
+                  className="mx-auto mb-4 animate-spin text-[color:var(--violet)]"
+                  size={40}
+                />
                 <h2 className="text-2xl font-bold mb-2">Preparing Download</h2>
                 <p className="text-muted-foreground text-sm mb-6 truncate">{songTitle}</p>
                 <p className="text-sm text-muted-foreground italic">Getting your song ready...</p>
@@ -221,9 +228,7 @@ export function DownloadModal({
               </>
             )}
 
-            {stage === "done" && (
-              <SuccessView title={songTitle} />
-            )}
+            {stage === "done" && <SuccessView title={songTitle} />}
           </motion.div>
           {stage === "done" && <Confetti />}
         </motion.div>
@@ -234,11 +239,7 @@ export function DownloadModal({
 
 function SuccessView({ title }: { title: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="py-4"
-    >
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="py-4">
       <motion.svg
         width="80"
         height="80"

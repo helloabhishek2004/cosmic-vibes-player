@@ -5,7 +5,73 @@ import { spawnYtDlp } from "./ytdlpSpawn.js";
 
 dotenv.config();
 
-const FFMPEG_LOCATION = process.env.FFMPEG_LOCATION;
+/**
+ * Dynamically resolves the directory containing FFmpeg and FFprobe binaries.
+ * Checks environment overrides first, then searches common system paths,
+ * and falls back to local bin/ folders.
+ * Returns the containing directory (which is what yt-dlp's --ffmpeg-location requires).
+ */
+export function getFFmpegLocation() {
+  // 1. Check FFMPEG_LOCATION override
+  if (process.env.FFMPEG_LOCATION) {
+    const overridePath = path.resolve(process.env.FFMPEG_LOCATION);
+    try {
+      if (fs.existsSync(overridePath)) {
+        const stats = fs.statSync(overridePath);
+        if (stats.isDirectory()) {
+          return overridePath;
+        } else if (stats.isFile()) {
+          // If it points to the file, return its parent directory
+          return path.dirname(overridePath);
+        }
+      }
+    } catch (err) {
+      console.warn(`[Startup] Failed to check FFMPEG_LOCATION override: ${err.message}`);
+    }
+  }
+
+  // 2. Search common production binary directories
+  const commonDirs = [
+    "/usr/bin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/local/sbin",
+    "/opt/homebrew/bin", // macOS fallback
+  ];
+
+  for (const dir of commonDirs) {
+    const isWindows = process.platform === "win32";
+    const ffmpegPath = path.join(dir, isWindows ? "ffmpeg.exe" : "ffmpeg");
+    const ffprobePath = path.join(dir, isWindows ? "ffprobe.exe" : "ffprobe");
+    if (fs.existsSync(ffmpegPath) && fs.existsSync(ffprobePath)) {
+      return dir;
+    }
+  }
+
+  // 3. Search local bin directories
+  const isWindows = process.platform === "win32";
+  const binaryName = isWindows ? "ffmpeg.exe" : "ffmpeg";
+
+  const localBinPath = path.join(process.cwd(), "bin");
+  if (fs.existsSync(path.join(localBinPath, binaryName))) {
+    return localBinPath;
+  }
+
+  const localBackendBinPath = path.join(process.cwd(), "backend", "bin");
+  if (fs.existsSync(path.join(localBackendBinPath, binaryName))) {
+    return localBackendBinPath;
+  }
+
+  return null;
+}
+
+// Store resolved path for runtime usage
+const FFMPEG_LOCATION = getFFmpegLocation();
+
+// Backward compatibility helper
+export function getFfmpegLocation() {
+  return FFMPEG_LOCATION;
+}
 
 function findDownloadedFile(outputDir, videoId) {
   const prefix = `${videoId}.`;
@@ -16,7 +82,10 @@ function findDownloadedFile(outputDir, videoId) {
 }
 
 function serializeMetadataValue(value = "") {
-  return String(value).replace(/(["\\])/g, "\\$1");
+  // Strip dangerous command injection/sub-shell evaluation characters: ` $ ; | & < >
+  return String(value)
+    .replace(/[`$;|&<>]/g, "")
+    .replace(/(["\\])/g, "\\$1");
 }
 
 function buildPostprocessorArgs(metadata) {
@@ -52,12 +121,19 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
     const outputTemplate = path.join(outputDir, `${videoId}.%(ext)s`);
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const postprocessorArgs = buildPostprocessorArgs(metadata);
+    const maxFileSize = process.env.MAX_FILE_SIZE || "100M";
+    const maxDurationSec = parseInt(process.env.MAX_VIDEO_DURATION_SECONDS || "1200", 10);
+    const limitRate = process.env.DOWNLOAD_RATE_LIMIT || "10M";
+
     const args = [
       "-f",
       "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
       "--no-playlist",
       "--js-runtimes",
-      "node",
+      process.execPath, // Point directly to the active Node executable
+      "--cache-dir",
+      path.join(outputDir, ".cache"), // Ensure writable local cache directory
+      "--no-live", // Reject live streams
       "--extract-audio",
       "--audio-format",
       "mp3",
@@ -65,6 +141,12 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
       "0",
       "--embed-thumbnail",
       "--add-metadata",
+      "--max-filesize",
+      maxFileSize,
+      "--match-filter",
+      `duration <= ${maxDurationSec}`,
+      "--limit-rate",
+      limitRate,
     ];
 
     if (FFMPEG_LOCATION) {
@@ -72,7 +154,7 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
     }
 
     if (postprocessorArgs) {
-      args.push("--postprocessor-args", postprocessorArgs);
+      args.push("--postprocessor-args", `ffmpeg:${postprocessorArgs}`);
     }
 
     args.push("-o", outputTemplate, videoUrl);

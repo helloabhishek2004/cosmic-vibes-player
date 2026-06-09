@@ -1,7 +1,6 @@
 import express from "express";
 import { body, validationResult } from "express-validator";
-import { downloadQueue, isQueueReady } from "../services/queue.js";
-import { startLocalJob } from "../services/localJobs.js";
+import jobManager from "../services/jobManager.js";
 
 const router = express.Router();
 
@@ -11,11 +10,10 @@ router.post(
     body("videoId")
       .trim()
       .notEmpty()
-      .withMessage("videoId is required"),
-    body("title")
-      .trim()
-      .notEmpty()
-      .withMessage("title is required"),
+      .withMessage("videoId is required")
+      .matches(/^[a-zA-Z0-9_-]{11}$/)
+      .withMessage("Invalid videoId format"),
+    body("title").trim().notEmpty().withMessage("title is required"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -25,32 +23,14 @@ router.post(
 
     const { videoId, title } = req.body;
 
-    if (!isQueueReady()) {
-      console.warn(
-        "[Download Queue] Redis unavailable — using in-memory job (local dev).",
-      );
-      const jobId = startLocalJob(videoId, title);
-      return res.json({ jobId });
-    }
-
     try {
-      console.log(`[Queue] Adding job for: ${title} (${videoId})`);
-      const job = await downloadQueue.add(
-        { videoId, title },
-        {
-          attempts: 1,
-          backoff: 5000,
-          removeOnComplete: false, // Keep it to fetch file name/results
-          removeOnFail: false,
-        }
-      );
-
-      return res.json({ jobId: job.id });
+      const { jobId } = await jobManager.createJob(videoId, title);
+      return res.json({ jobId });
     } catch (err) {
-      console.error(`Error adding job to queue: ${err.message}`);
+      console.error(`Error adding download job: ${err.message}`);
       return res.status(500).json({ error: "Failed to queue download job" });
     }
-  }
+  },
 );
 
 export default router;

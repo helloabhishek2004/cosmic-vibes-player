@@ -239,15 +239,15 @@ export function usePlaybackPosition() {
 
   useEffect(() => {
     const a = ensureAudio();
-    
+
     const handleTimeUpdate = () => {
       setPosition(a.currentTime);
     };
-    
+
     const handleLoadedMetadata = () => {
       setDuration(a.duration);
     };
-    
+
     const handleDurationChange = () => {
       setDuration(a.duration);
     };

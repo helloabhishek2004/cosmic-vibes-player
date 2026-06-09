@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, Search } from "lucide-react";
 import { Starfield } from "@/components/Starfield";
-import { Meteors } from "@/components/Meteors";
 import { Doodles } from "@/components/Doodles";
 import { DownloadModal } from "@/components/DownloadModal";
 import { LazySongGrid } from "@/components/LazySongGrid";
@@ -18,7 +17,10 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "dua.mp3 — Search. Discover. Download." },
-      { name: "description", content: "Search, discover, and download your favorite tracks instantly." },
+      {
+        name: "description",
+        content: "Search, discover, and download your favorite tracks instantly.",
+      },
       { property: "og:title", content: "dua.mp3" },
       { property: "og:description", content: "Search. Discover. Download." },
     ],
@@ -117,7 +119,6 @@ function Home() {
   return (
     <>
       <Starfield />
-      <Meteors />
       <Doodles />
       <main className="min-h-dvh px-4 py-12 md:py-20 pb-32">
         <div className="max-w-6xl mx-auto">
@@ -127,7 +128,7 @@ function Home() {
             transition={{ duration: 0.6 }}
             className="text-center mb-10"
           >
-            <h1 className="title-glow font-display text-6xl md:text-8xl font-extrabold gradient-text tracking-tight inline-block">
+            <h1 className="title-glow font-display text-6xl md:text-8xl font-extrabold text-white tracking-tight inline-block">
               dua.mp3
             </h1>
             <p className="mt-4 text-lg md:text-xl text-muted-foreground">

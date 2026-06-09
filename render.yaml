@@ -1,0 +1,38 @@
+services:
+  # Node.js Backend API Service (using Docker to get Python & FFMPEG)
+  - type: web
+    name: cosmic-vibes-backend
+    env: docker
+    rootDirectory: backend
+    plan: free
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: QUEUE_MODE
+        value: local # Default to local (no-Redis) fallback to run on Render Free Tier easily
+      - key: DOWNLOAD_DIR
+        value: downloads
+      - key: PYTHON_SERVICE_URL
+        value: https://cosmic-vibes-metadata.onrender.com # Replace with your deployed metadata service URL
+      - key: FRONTEND_URL
+        value: https://cosmic-vibes-player.vercel.app # Replace with your Vercel frontend URL
+      - key: REDIS_URL
+        sync: false # Set this if QUEUE_MODE is changed to redis
+      - key: MAX_CONCURRENT_JOBS
+        value: "2" # Protect Render Free Tier from OOM
+      - key: MAX_VIDEO_DURATION_MINUTES
+        value: "20" # Prevent long downloads
+      - key: DOWNLOAD_RATE_LIMIT
+        value: "10M" # Bandwidth limit (10 MB/s)
+
+  # Python Metadata Service (Native Python environment)
+  - type: web
+    name: cosmic-vibes-metadata
+    env: python
+    rootDirectory: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn metadata:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: ENV
+        value: production

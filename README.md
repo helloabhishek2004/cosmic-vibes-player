@@ -163,6 +163,100 @@ cosmic-vibes-player/
 └── README.md         # This file
 ```
 
+## Codebase overview
+
+### What this project does
+
+`cosmic-vibes-player` is a music discovery and download app.
+
+- The frontend provides a search UI and an immersive cosmic theme.
+- The Express backend handles search requests, download job queuing, progress tracking, and file downloads.
+- The Python service fetches YouTube Music metadata for search results, trending charts, and song detail resolution.
+- yt-dlp is used to extract audio from YouTube and convert it to MP3.
+- Redis is used as a queue backend for download jobs, with an in-memory fallback when Redis is unavailable.
+
+### Frontend (`src/`)
+
+- `src/routes/__root.tsx` — application shell, HTML layout, error boundary, and shared `QueryClient` provider.
+- `src/routes/index.tsx` — home page with search input, trending list, debounced queries, live suggestions, and download modal trigger.
+- `src/routes/song.$id.tsx` — song detail page that loads metadata from the API, shows album artwork, and renders an audio preview player.
+- `src/router.tsx` and `src/routeTree.gen.ts` — TanStack router configuration and generated route tree used by the app.
+
+- `src/api/client.ts` — Axios client that calls the backend API using `VITE_API_URL` or the current host.
+- `src/lib/api-base.ts` — helper for backend base URL construction and streaming preview URLs.
+- `src/lib/map-song.ts` — maps backend API track objects into the app’s normalized `Song` shape.
+- `src/data/songs.ts` — local `Song` type definition and sample preview songs used as placeholders.
+- `src/lib/player-store.ts` — audio playback store that manages a shared `HTMLAudioElement`, queue state, event listeners, play/pause/seek controls, and React hooks.
+- `src/lib/audio-player.ts` — compatibility export wrapper for playback helper functions.
+
+- `src/components/BottomPlayer.tsx` — sticky footer audio player with play/pause, next/previous, and current track display.
+- `src/components/LazySongGrid.tsx` — grid component that lazy-loads `SongCard` items using the Intersection Observer API.
+- `src/components/DownloadModal.tsx` — modal that starts downloads, polls `/api/status`, displays progress, and fetches the final MP3 file from `/api/file`.
+- `src/components/SongCard.tsx`, `SongCardSkeleton.tsx` — song tiles and loading skeletons (UI for listing tracks).
+- `src/components/Starfield.tsx`, `Meteors.tsx`, `Doodles.tsx` — decorative cosmic background visuals.
+
+### Backend (`backend/`)
+
+- `backend/server.js` — main Express app setup.
+  - enables `helmet`, `compression`, `cors`, `morgan`, and JSON body parsing.
+  - defines a development-friendly CORS policy for `localhost` and LAN IPs.
+  - applies rate limiting to download and file routes.
+  - mounts API routes and starts graceful shutdown handlers.
+  - initializes yt-dlp availability and cleanup interval.
+
+- Routes:
+  - `backend/routes/search.js` — validates `q`, checks cache, forwards search queries to Python metadata service, and caches results.
+  - `backend/routes/trending.js` — returns trending songs from the Python service and caches them for 10 minutes.
+  - `backend/routes/song.js` — fetches detailed song metadata for a specific `videoId`.
+  - `backend/routes/download.js` — enqueues download jobs in Bull or falls back to `services/localJobs.js` when Redis is unavailable.
+  - `backend/routes/status.js` — returns job state for queued downloads and maps Bull states to `queued`, `processing`, `done`, and `failed`.
+  - `backend/routes/file.js` — streams completed audio files to the browser and removes temp files after download.
+  - `backend/routes/stream.js` — streams real-time audio from YouTube through yt-dlp for preview playback.
+
+- Services:
+  - `backend/services/queue.js` — Bull queue wrapper and Redis connection monitoring.
+  - `backend/services/metadataClient.js` — Axios client for the Python metadata service.
+  - `backend/services/cache.js` — in-memory caching using `node-cache`.
+  - `backend/services/ytdlpSpawn.js` — spawns `python -m yt_dlp` safely on Windows.
+  - `backend/services/ytdlp.js` — constructs yt-dlp arguments, downloads audio, and resolves final file paths.
+  - `backend/services/localJobs.js` — fallback in-memory job runner for local development when Redis is unavailable.
+  - `backend/services/cleanup.js` — periodically removes stale files older than 10 minutes from the downloads folder.
+
+- Worker:
+  - `backend/workers/worker.js` — registers Bull job processing, fetches song metadata for tags, downloads audio via `downloadAudio()`, reports progress, and returns the final MP3 path.
+
+- Config:
+  - `backend/.env` — backend runtime configuration for ports, Redis URL, download directory, queue concurrency, and Python service URL.
+  - `backend/ecosystem.config.cjs` — PM2 process manager configuration for running backend services in production.
+
+### Python metadata service (`python/`)
+
+- `python/metadata.py` — FastAPI service exposing:
+  - `GET /search?q=...` — searches YouTube Music for songs, maps data to a normalized response shape.
+  - `GET /trending?country=US` — returns top trending songs via YouTube Music charts.
+  - `GET /song/{video_id}` — resolves detailed metadata and enriches it with album, year, and duration.
+- Uses `ytmusicapi` to talk to YouTube Music without requiring authentication.
+- Includes helper functions `parse_duration_seconds`, `map_track_item`, and `map_search_results` to normalize API results.
+- Enables CORS for frontend-to-backend communication.
+
+### Tech stack
+
+- Frontend: React 19, TanStack Router, TanStack React Query, Vite, Tailwind CSS, Radix UI, Framer Motion, Axios.
+- Backend: Node.js, Express, Bull, Redis, ioredis, Axios, Helmet, CORS, dotenv, morgan, express-rate-limit, express-validator.
+- Python service: Python 3.10+, FastAPI, Uvicorn, ytmusicapi, Pydantic.
+- Media extraction: yt-dlp, ffmpeg (optional for metadata embedding), and YouTube Music metadata.
+
+### Key methods and functions
+
+- `backend/services/ytdlp.js` — `downloadAudio(videoId, outputDir, onProgress, metadata)` downloads audio, converts to MP3, and embeds metadata.
+- `backend/services/localJobs.js` — `startLocalJob(videoId, title)` runs fallback downloads without Redis.
+- `backend/routes/download.js` — enqueues jobs and returns `jobId` to the frontend.
+- `backend/routes/status.js` — polls job status for frontend progress updates.
+- `backend/routes/file.js` — streams completed files using `res.download()`.
+- `src/lib/player-store.ts` — manages audio state, playback queue, and hooks like `usePlayback`, `useAudioProgress`, and `seek()`.
+- `src/components/DownloadModal.tsx` — handles download lifecycle, status polling, retry logic, and file saving on the client.
+- `src/lib/map-song.ts` — normalizes backend items into UI-ready `Song` objects.
+
 More backend detail (Windows Redis notes, PM2 commands): see [backend/README.md](backend/README.md).
 
 ## Troubleshooting

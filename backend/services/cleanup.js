@@ -7,8 +7,14 @@ import path from "path";
  * @param {number} intervalMs - Frequency of checks (default 5 minutes)
  * @param {number} maxAgeMs - Max age of files to keep (default 10 minutes)
  */
-export function startCleanupInterval(downloadDir, intervalMs = 5 * 60 * 1000, maxAgeMs = 10 * 60 * 1000) {
-  console.log(`Starting cleanup interval for directory: ${downloadDir} (every ${intervalMs / 1000}s)`);
+export function startCleanupInterval(
+  downloadDir,
+  intervalMs = 5 * 60 * 1000,
+  maxAgeMs = 10 * 60 * 1000,
+) {
+  console.log(
+    `Starting cleanup interval for directory: ${downloadDir} (every ${intervalMs / 1000}s)`,
+  );
 
   setInterval(() => {
     try {

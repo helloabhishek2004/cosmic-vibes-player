@@ -6,12 +6,7 @@ const router = express.Router();
 
 router.get(
   "/:videoId",
-  [
-    param("videoId")
-      .trim()
-      .notEmpty()
-      .withMessage("Video ID is required"),
-  ],
+  [param("videoId").trim().notEmpty().withMessage("Video ID is required")],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -65,7 +60,9 @@ router.get(
     child.stdout.pipe(res);
 
     child.on("close", (code) => {
-      console.log(`[Audio Stream] Completed streaming with exit code ${code} for video: ${videoId}`);
+      console.log(
+        `[Audio Stream] Completed streaming with exit code ${code} for video: ${videoId}`,
+      );
       res.end();
     });
 
@@ -78,14 +75,16 @@ router.get(
 
     // If user stops playing or closes the tab, kill the child process to save CPU/Network
     req.on("close", () => {
-      console.log(`[Audio Stream] Connection closed by client. Killing process for video: ${videoId}`);
+      console.log(
+        `[Audio Stream] Connection closed by client. Killing process for video: ${videoId}`,
+      );
       try {
         child.kill();
       } catch (err) {
         // Process might already be dead
       }
     });
-  }
+  },
 );
 
 export default router;

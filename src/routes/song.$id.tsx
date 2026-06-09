@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Download, Loader2, Pause, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Starfield } from "@/components/Starfield";
-import { Meteors } from "@/components/Meteors";
 import { DownloadModal } from "@/components/DownloadModal";
 import {
   stop as stopAudio,
@@ -50,12 +49,17 @@ export const Route = createFileRoute("/song/$id")({
   head: ({ loaderData }) => ({
     meta: [
       { title: loaderData ? `${loaderData.title} — ${loaderData.artist} | dua.mp3` : "dua.mp3" },
-      { name: "description", content: loaderData ? `Download ${loaderData.title} by ${loaderData.artist}` : "" },
+      {
+        name: "description",
+        content: loaderData ? `Download ${loaderData.title} by ${loaderData.artist}` : "",
+      },
     ],
   }),
   component: SongPage,
   notFoundComponent: () => (
-    <div className="min-h-dvh flex items-center justify-center text-muted-foreground">Song not found</div>
+    <div className="min-h-dvh flex items-center justify-center text-muted-foreground">
+      Song not found
+    </div>
   ),
 });
 
@@ -74,11 +78,9 @@ function SongPage() {
   return (
     <>
       <Starfield />
-      <Meteors count={8} />
       <div
         aria-hidden
         className="fixed inset-0 -z-10"
-
         style={{
           backgroundImage: `url(${song.thumbnailUrl})`,
           backgroundSize: "cover",
@@ -111,13 +113,17 @@ function SongPage() {
               className="w-full rounded-2xl shadow-2xl aspect-square object-cover"
             />
             <div>
-              <p className="text-sm uppercase tracking-widest text-muted-foreground">{song.album}</p>
+              <p className="text-sm uppercase tracking-widest text-muted-foreground">
+                {song.album}
+              </p>
               <h1 className="text-4xl md:text-5xl font-extrabold mt-2">{song.title}</h1>
               <p className="text-xl text-muted-foreground mt-2">{song.artist}</p>
 
               <div className="flex flex-wrap gap-2 mt-5">
                 {song.genre.map((g: string) => (
-                  <span key={g} className="text-xs glass rounded-full px-3 py-1">{g}</span>
+                  <span key={g} className="text-xs glass rounded-full px-3 py-1">
+                    {g}
+                  </span>
                 ))}
               </div>
 

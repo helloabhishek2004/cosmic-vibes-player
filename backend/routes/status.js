@@ -1,7 +1,6 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
-import { downloadQueue, isQueueReady } from "../services/queue.js";
-import { getLocalJobStatus, isLocalJob } from "../services/localJobs.js";
+import jobManager from "../services/jobManager.js";
 
 const router = express.Router();
 
@@ -11,7 +10,9 @@ router.get(
     param("jobId")
       .trim()
       .notEmpty()
-      .withMessage("jobId is required"),
+      .withMessage("jobId is required")
+      .matches(/^[a-zA-Z0-9_-]+$/)
+      .withMessage("Invalid jobId format"),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -21,48 +22,23 @@ router.get(
 
     const { jobId } = req.params;
 
-    if (isLocalJob(jobId)) {
-      const local = getLocalJobStatus(jobId);
-      if (!local) {
-        return res.status(404).json({ error: "Job not found" });
-      }
-      return res.json(local);
-    }
-
-    if (!isQueueReady()) {
-      return res.status(503).json({ error: "Download service unavailable" });
-    }
-
     try {
-      const job = await downloadQueue.getJob(jobId);
-      if (!job) {
+      const jobStatus = await jobManager.getJobStatus(jobId);
+      if (!jobStatus) {
         return res.status(404).json({ error: "Job not found" });
-      }
-
-      const state = await job.getState();
-      const progress = job.progress();
-
-      // Map Bull states to api states: "queued" | "processing" | "done" | "failed"
-      let status = "queued";
-      if (state === "active") {
-        status = "processing";
-      } else if (state === "completed") {
-        status = "done";
-      } else if (state === "failed") {
-        status = "failed";
       }
 
       return res.json({
-        jobId: job.id,
-        status,
-        progress: progress || 0,
-        error: state === "failed" ? (job.failedReason || "Unknown job failure") : null,
+        jobId: jobStatus.jobId,
+        status: jobStatus.status,
+        progress: jobStatus.progress || 0,
+        error: jobStatus.error,
       });
     } catch (err) {
       console.error(`Error fetching job status for ${jobId}: ${err.message}`);
       return res.status(500).json({ error: "Failed to get job status" });
     }
-  }
+  },
 );
 
 export default router;

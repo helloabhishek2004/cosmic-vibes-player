@@ -28,15 +28,17 @@ export function Starfield() {
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
-      w = (canvas.width = Math.max(1, window.innerWidth * dpr));
-      h = (canvas.height = Math.max(1, window.innerHeight * dpr));
+      w = canvas.width = Math.max(1, window.innerWidth * dpr);
+      h = canvas.height = Math.max(1, window.innerHeight * dpr);
       canvas.style.width = window.innerWidth + "px";
       canvas.style.height = window.innerHeight + "px";
 
       stars = [];
       for (let li = 0; li < layers.length; li++) {
         const layer = layers[li];
-        const count = Math.round(layer.count * Math.min(1, (window.innerWidth * window.innerHeight) / (1280 * 720)));
+        const count = Math.round(
+          layer.count * Math.min(1, (window.innerWidth * window.innerHeight) / (1280 * 720)),
+        );
         for (let i = 0; i < count; i++) {
           const z = Math.random() * 0.8 + 0.2;
           const vy = -((2000 / (layer.duration * 1000)) * (0.8 + Math.random() * 0.4));

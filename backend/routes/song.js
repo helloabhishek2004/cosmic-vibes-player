@@ -6,12 +6,7 @@ const router = express.Router();
 
 router.get(
   "/:videoId",
-  [
-    param("videoId")
-      .trim()
-      .notEmpty()
-      .withMessage("Video ID is required"),
-  ],
+  [param("videoId").trim().notEmpty().withMessage("Video ID is required")],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -26,14 +21,14 @@ router.get(
       return res.json(response.data);
     } catch (err) {
       console.error(`Song details error calling Python service: ${err.message}`);
-      
+
       if (err.response && err.response.status === 404) {
         return res.status(404).json({ error: "Song not found" });
       }
-      
+
       return res.status(500).json({ error: "Failed to fetch song details" });
     }
-  }
+  },
 );
 
 export default router;

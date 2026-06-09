@@ -79,6 +79,11 @@ def map_search_results(items, limit=20):
     return mapped[:limit]
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.get("/search")
 def search(q: str = Query(..., min_length=1)):
     if not yt:
@@ -204,4 +209,9 @@ def get_song(video_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("metadata:app", host="0.0.0.0", port=8001, reload=True)
+    import os
+    port = int(os.environ.get("PORT", 8001))
+    env_name = os.environ.get("ENV", "development").lower()
+    reload = env_name != "production"
+    logger.info(f"Starting uvicorn server in {env_name} mode on port {port}...")
+    uvicorn.run("metadata:app", host="0.0.0.0", port=port, reload=reload)

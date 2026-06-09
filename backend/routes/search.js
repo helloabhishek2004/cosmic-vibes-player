@@ -36,16 +36,16 @@ router.get(
       });
 
       const data = response.data || [];
-      
+
       // Store in cache
       cache.set(cacheKey, data);
-      
+
       return res.json(data);
     } catch (err) {
       console.error(`Search error calling Python service: ${err.message}`);
       return res.status(500).json({ error: "Failed to search songs. Python microservice error." });
     }
-  }
+  },
 );
 
 export default router;
