@@ -9,8 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp globally (upgrade to latest stable)
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U yt-dlp
-
+RUN python3 -m pip install --no-cache-dir -U yt-dlp
 # Verify dependencies during build - fails build if any are missing
 RUN ffmpeg -version && ffprobe -version && python3 -m yt_dlp --version
 
@@ -21,8 +20,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # Install npm dependencies (production only)
-RUN npm ci --only=production
-
+RUN npm ci --omit=dev
 # Copy the rest of the application files
 COPY . .
 
@@ -39,3 +37,10 @@ EXPOSE 3001
 
 # Run the server
 CMD ["node", "server.js"]
+# Install yt-dlp globally
+RUN python3 -m pip install --no-cache-dir -U yt-dlp
+
+# Verify dependencies
+RUN ffmpeg -version && \
+    ffprobe -version && \
+    python3 -m yt_dlp --version
