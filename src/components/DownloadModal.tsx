@@ -43,10 +43,11 @@ export function DownloadModal({
 
       // Start Polling status
       pollStatus(jobId);
-    } catch (err: any) {
+    } catch (err) {
       console.error("[Frontend] Download request failed:", err);
+      const errorObj = err as { response?: { data?: { error?: string } } };
       const message =
-        err.response?.data?.error ||
+        errorObj.response?.data?.error ||
         "Download service unavailable. Make sure Redis and backend are running.";
       handleFailure(message);
     }
@@ -78,7 +79,7 @@ export function DownloadModal({
           cleanupPoll();
           handleFailure(error || "Conversion failed.");
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("[Frontend] Polling status failed:", err);
       }
     }, 1500);
@@ -93,15 +94,15 @@ export function DownloadModal({
       a.href = url;
       // Normalize header value to a string before using includes()
       // Axios may return a variety of header shapes; defensively coerce to string
-      const rawContentType =
-        (res.headers as any)["content-type"] ?? (res.headers as any).get?.("content-type");
+      const headers = res.headers as Record<string, string>;
+      const rawContentType = headers?.["content-type"] ?? headers?.["Content-Type"];
       const contentType =
         typeof rawContentType === "string" ? rawContentType : String(rawContentType ?? "");
       const ext = contentType.includes("webm") ? ".webm" : ".m4a";
       a.download = `${songTitle}${ext}`;
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err) {
       console.error("[Frontend] File streaming failed:", err);
       toast.error("Failed to stream audio file from server.");
     }
@@ -137,6 +138,7 @@ export function DownloadModal({
       cleanupPoll();
     }
     return () => cleanupPoll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, videoId]);
 
   useEffect(() => {
