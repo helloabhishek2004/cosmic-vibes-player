@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { spawnYtDlp } from "./ytdlpSpawn.js";
+import { getYoutubeCookiesPath } from "./cookieManager.js";
 
 dotenv.config();
 
