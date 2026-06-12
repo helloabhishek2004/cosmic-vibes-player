@@ -288,7 +288,7 @@ async function runStartupTestSuite() {
       const pythonCmd = process.env.PYTHON_PATH || "python";
       exec(
         `${pythonCmd} -m yt_dlp --dump-json --playlist-items 1 "https://www.youtube.com/watch?v=jNQXAC9IVRw"`,
-        { timeout: 5000 },
+        { timeout: 20000 },
         (error, stdout) => {
           if (!error && stdout) {
             try {

@@ -1,0 +1,1 @@
+import{j as o}from"./index-COkWPMAL.js";const n=()=>o.jsx("div",{className:"min-h-dvh flex items-center justify-center text-muted-foreground",children:"Song not found"});export{n as notFoundComponent};

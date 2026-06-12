@@ -33,6 +33,24 @@ router.get(
 
     const setContentType = (line) => {
       if (contentTypeSet) return;
+      
+      // Map common YouTube format IDs to proper MIME types
+      const formatMatch = line.match(/Downloading 1 format\(s\):\s*(\d+)/i);
+      if (formatMatch) {
+        const formatId = formatMatch[1];
+        if (["139", "140"].includes(formatId)) {
+          res.setHeader("Content-Type", "audio/mp4");
+          contentTypeSet = true;
+          console.log(`[Audio Stream] Detected format ID ${formatId}. Set Content-Type to audio/mp4`);
+          return;
+        } else if (["249", "250", "251", "171"].includes(formatId)) {
+          res.setHeader("Content-Type", "audio/webm");
+          contentTypeSet = true;
+          console.log(`[Audio Stream] Detected format ID ${formatId}. Set Content-Type to audio/webm`);
+          return;
+        }
+      }
+
       if (/\.m4a|audio.?mp4/i.test(line)) {
         res.setHeader("Content-Type", "audio/mp4");
         contentTypeSet = true;
@@ -52,8 +70,10 @@ router.get(
 
     child.stdout.on("data", () => {
       if (!contentTypeSet && !res.headersSent) {
-        res.setHeader("Content-Type", "audio/webm");
+        // Fallback to audio/mp4 since m4a is the first priority format
+        res.setHeader("Content-Type", "audio/mp4");
         contentTypeSet = true;
+        console.log("[Audio Stream] Fallback: Set Content-Type to audio/mp4");
       }
     });
 
