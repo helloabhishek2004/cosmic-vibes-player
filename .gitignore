@@ -16,6 +16,12 @@ dist-ssr
 .nitro
 *.local
 
+# Vercel build artifacts — NEVER commit these.
+# When .vercel/output is present in git, Vercel skips the build entirely
+# and deploys stale prebuilt artifacts, ignoring any source changes.
+.vercel/output
+.vercel/project.json
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
