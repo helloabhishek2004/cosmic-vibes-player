@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import { getFFmpegLocation } from "../services/ytdlp.js";
 import { isQueueReady } from "../services/queue.js";
 import metadataClient from "../services/metadataClient.js";
+import { PYTHON } from "../services/pythonConfig.js";
 
 const router = express.Router();
 
@@ -18,8 +19,7 @@ function checkCommandExists(cmd) {
 // Helper to check if yt-dlp is available via Python
 function checkYtDlpExists() {
   return new Promise((resolve) => {
-    const pythonCmd = process.env.PYTHON_PATH || "python";
-    exec(`${pythonCmd} -m yt_dlp --version`, { timeout: 1500 }, (error) => {
+    exec(`${PYTHON} -m yt_dlp --version`, { timeout: 10000 }, (error) => {
       resolve(!error);
     });
   });

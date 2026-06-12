@@ -11,6 +11,7 @@ import { spawnYtDlp } from "./services/ytdlpSpawn.js";
 import { getFFmpegLocation } from "./services/ytdlp.js";
 import { spawn, exec } from "child_process";
 import metadataClient from "./services/metadataClient.js";
+import { PYTHON } from "./services/pythonConfig.js";
 
 // Load environment variables
 dotenv.config();
@@ -249,8 +250,7 @@ function checkCommandExists(cmd) {
 // Helper to check if yt-dlp is available via Python
 function checkYtDlpExists() {
   return new Promise((resolve) => {
-    const pythonCmd = process.env.PYTHON_PATH || "python";
-    exec(`${pythonCmd} -m yt_dlp --version`, { timeout: 1500 }, (error) => {
+    exec(`${PYTHON} -m yt_dlp --version`, { timeout: 10000 }, (error) => {
       resolve(!error);
     });
   });
@@ -285,9 +285,8 @@ async function runStartupTestSuite() {
   let ytdlpMetadataOk = false;
   if (ytdlpOk) {
     ytdlpMetadataOk = await new Promise((resolve) => {
-      const pythonCmd = process.env.PYTHON_PATH || "python";
       exec(
-        `${pythonCmd} -m yt_dlp --dump-json --playlist-items 1 "https://www.youtube.com/watch?v=jNQXAC9IVRw"`,
+        `${PYTHON} -m yt_dlp --dump-json --playlist-items 1 "https://www.youtube.com/watch?v=jNQXAC9IVRw"`,
         { timeout: 20000 },
         (error, stdout) => {
           if (!error && stdout) {
