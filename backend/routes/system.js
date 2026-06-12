@@ -1,6 +1,7 @@
 import express from "express";
 import { exec } from "child_process";
 import { getFFmpegLocation } from "../services/ytdlp.js";
+import { getYoutubeCookiesPath } from "../services/cookieManager.js";
 import { isQueueReady } from "../services/queue.js";
 import metadataClient from "../services/metadataClient.js";
 import { PYTHON } from "../services/pythonConfig.js";
