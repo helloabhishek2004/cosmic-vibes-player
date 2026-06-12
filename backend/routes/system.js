@@ -83,4 +83,16 @@ router.get("/youtube", async (req, res) => {
   }
 });
 
+router.get("/cookies", (req, res) => {
+  const envCookies = process.env.YOUTUBE_COOKIES;
+  const cookiesPath = getYoutubeCookiesPath();
+  const fileExists = cookiesPath ? fs.existsSync(cookiesPath) : false;
+
+  res.json({
+    envExists: !!(envCookies && envCookies.trim() !== ""),
+    cookiesPath: cookiesPath || "null",
+    fileExists: fileExists,
+  });
+});
+
 export default router;
