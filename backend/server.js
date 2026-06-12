@@ -9,6 +9,7 @@ import path from "path";
 import fs from "fs";
 import { spawnYtDlp } from "./services/ytdlpSpawn.js";
 import { getFFmpegLocation } from "./services/ytdlp.js";
+import { initYoutubeCookies } from "./services/cookieManager.js";
 import { spawn, exec } from "child_process";
 import metadataClient from "./services/metadataClient.js";
 import { PYTHON } from "./services/pythonConfig.js";
