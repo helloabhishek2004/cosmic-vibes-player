@@ -116,6 +116,7 @@ function checkFfmpegGlobal() {
 }
 
 validateEnv();
+initYoutubeCookies();
 
 // Verify yt-dlp installation at server startup
 function checkYtdlp() {
@@ -367,3 +368,4 @@ async function gracefulShutdown(signal) {
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+GTERM", () => gracefulShutdown("SIGTERM"));

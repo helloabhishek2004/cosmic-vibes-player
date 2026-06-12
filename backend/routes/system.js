@@ -67,4 +67,19 @@ router.get("/health", async (req, res) => {
   }
 });
 
+router.get("/youtube", async (req, res) => {
+  try {
+    const hasYtdlp = await checkYtDlpExists();
+    const cookiesPath = getYoutubeCookiesPath();
+
+    res.json({
+      cookiesConfigured: !!cookiesPath,
+      cookiesFileExists: !!cookiesPath,
+      ytdlpInstalled: hasYtdlp,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to check YouTube status" });
+  }
+});
+
 export default router;

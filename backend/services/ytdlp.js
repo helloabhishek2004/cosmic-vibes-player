@@ -124,6 +124,7 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
     const maxFileSize = process.env.MAX_FILE_SIZE || "100M";
     const maxDurationSec = parseInt(process.env.MAX_VIDEO_DURATION_SECONDS || "1200", 10);
     const limitRate = process.env.DOWNLOAD_RATE_LIMIT || "10M";
+    const cookiesPath = getYoutubeCookiesPath();
 
     const args = [
       "-f",
@@ -145,7 +146,13 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
       `duration <= ${maxDurationSec}`,
       "--limit-rate",
       limitRate,
+      "--extractor-args",
+      "youtube:player_client=android",
     ];
+
+    if (cookiesPath) {
+      args.push("--cookies", cookiesPath);
+    }
 
     if (FFMPEG_LOCATION) {
       args.push("--ffmpeg-location", FFMPEG_LOCATION);
@@ -157,7 +164,9 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
 
     args.push("-o", outputTemplate, videoUrl);
 
-    console.log(`Spawning yt-dlp with arguments: ${args.join(" ")}`);
+    console.log(`[yt-dlp] Downloading: ${videoId}`);
+    console.log(`[yt-dlp] Cookies enabled: ${!!cookiesPath}`);
+    console.log(`[yt-dlp] Spawning with arguments: ${args.join(" ")}`);
     const child = spawnYtDlp(args);
 
     let errorOutput = "";
@@ -189,11 +198,20 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
           );
         }
       } else {
-        reject(
-          new Error(
-            `yt-dlp exited with code ${code}. Error: ${errorOutput || "Unknown yt-dlp error"}`,
-          ),
-        );
+        if (
+          errorOutput.toLowerCase().includes("sign in to confirm you're not a bot") ||
+          errorOutput.toLowerCase().includes("cookies expired")
+        ) {
+          const authError = new Error("YouTube cookies may be expired");
+          authError.code = "YOUTUBE_AUTH_REQUIRED";
+          reject(authError);
+        } else {
+          reject(
+            new Error(
+              `yt-dlp exited with code ${code}. Error: ${errorOutput || "Unknown yt-dlp error"}`,
+            ),
+          );
+        }
       }
     });
 
