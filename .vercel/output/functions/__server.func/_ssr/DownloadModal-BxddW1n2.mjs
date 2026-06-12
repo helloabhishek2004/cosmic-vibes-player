@@ -70,7 +70,6 @@ function Starfield() {
         const oy = oyBase * depth * ((3 - s.layer) * 0.18) + scrollY * 0.02 * (s.layer + 1);
         const px = s.x + ox;
         const py = s.y + oy;
-      
         const size = Math.max(1, Math.round(s.size * dpr));
         const alpha = 0.18 + s.z * 0.7;
         ctx.fillStyle = `rgba(255,255,255,${alpha})`;
