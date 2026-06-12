@@ -1,6 +1,7 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
 import { spawnYtDlp } from "../services/ytdlpSpawn.js";
+import { getYoutubeCookiesPath } from "../services/cookieManager.js";
 
 const router = express.Router();
 
@@ -15,8 +16,10 @@ router.get(
 
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const cookiesPath = getYoutubeCookiesPath();
 
     console.log(`[Audio Stream] Streaming real-time audio for video: ${videoId}`);
+    console.log(`[Audio Stream] Cookies enabled: ${!!cookiesPath}`);
 
     // Prefer m4a for broader browser support; fall back to webm opus.
     const args = [
@@ -28,8 +31,16 @@ router.get(
       videoUrl,
     ];
 
+    if (cookiesPath) {
+      args.push("--cookies", cookiesPath);
+    } else {
+      args.push("--extractor-args", "youtube:player_client=android");
+    }
+
+    console.log(`[Audio Stream] Spawning yt-dlp with args: ${args.join(" ")}`);
     const child = spawnYtDlp(args);
     let contentTypeSet = false;
+    let firstChunkReceived = false;
 
     const setContentType = (line) => {
       if (contentTypeSet) return;
@@ -54,21 +65,26 @@ router.get(
       if (/\.m4a|audio.?mp4/i.test(line)) {
         res.setHeader("Content-Type", "audio/mp4");
         contentTypeSet = true;
+        console.log(`[Audio Stream] Pattern match: Set Content-Type to audio/mp4`);
       } else if (/\.webm|audio.?webm/i.test(line)) {
         res.setHeader("Content-Type", "audio/webm");
         contentTypeSet = true;
+        console.log(`[Audio Stream] Pattern match: Set Content-Type to audio/webm`);
       }
     };
 
     child.stderr.on("data", (data) => {
       const text = data.toString();
+      console.error(`[Audio Stream stderr] ${text.trim()}`);
       setContentType(text);
-      if (/error|unable/i.test(text)) {
-        console.error(`[Audio Stream] yt-dlp: ${text.trim()}`);
-      }
     });
 
-    child.stdout.on("data", () => {
+    child.stdout.on("data", (data) => {
+      if (!firstChunkReceived) {
+        firstChunkReceived = true;
+        console.log(`[Audio Stream] First audio chunk received (${data.length} bytes)`);
+      }
+      
       if (!contentTypeSet && !res.headersSent) {
         // Fallback to audio/mp4 since m4a is the first priority format
         res.setHeader("Content-Type", "audio/mp4");
@@ -81,7 +97,7 @@ router.get(
 
     child.on("close", (code) => {
       console.log(
-        `[Audio Stream] Completed streaming with exit code ${code} for video: ${videoId}`,
+        `[Audio Stream] yt-dlp exited with code ${code} for video: ${videoId}`,
       );
       res.end();
     });

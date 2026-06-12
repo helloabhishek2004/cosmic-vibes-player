@@ -147,12 +147,14 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
       `duration <= ${maxDurationSec}`,
       "--limit-rate",
       limitRate,
-      "--extractor-args",
-      "youtube:player_client=android",
     ];
 
     if (cookiesPath) {
       args.push("--cookies", cookiesPath);
+    } else {
+      // Only use android client fallback if cookies are NOT present,
+      // as android client doesn't support cookies.
+      args.push("--extractor-args", "youtube:player_client=android");
     }
 
     if (FFMPEG_LOCATION) {
