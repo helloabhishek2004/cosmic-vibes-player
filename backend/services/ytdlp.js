@@ -129,8 +129,6 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
       "-f",
       "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
       "--no-playlist",
-      "--js-runtimes",
-      process.execPath, // Point directly to the active Node executable
       "--cache-dir",
       path.join(outputDir, ".cache"), // Ensure writable local cache directory
       "--no-live", // Reject live streams
