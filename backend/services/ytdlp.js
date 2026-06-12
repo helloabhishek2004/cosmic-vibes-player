@@ -169,6 +169,12 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
 
     console.log(`[yt-dlp] Downloading: ${videoId}`);
     console.log(`[yt-dlp] Cookies enabled: ${!!cookiesPath}`);
+
+    console.log("[yt-dlp] Cookie file used:", cookiesPath);
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
+      console.log("[yt-dlp] Cookie file size:", fs.statSync(cookiesPath).size);
+    }
+
     console.log(`[yt-dlp] Spawning with arguments: ${args.join(" ")}`);
     const child = spawnYtDlp(args);
 

@@ -20,6 +20,11 @@ router.get(
 
     console.log(`[Audio Stream] Streaming real-time audio for video: ${videoId}`);
     console.log(`[Audio Stream] Cookies enabled: ${!!cookiesPath}`);
+    console.log(`[Audio Stream] Cookie file used: ${cookiesPath}`);
+
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
+      console.log(`[Audio Stream] Cookie file size: ${fs.statSync(cookiesPath).size}`);
+    }
 
     // Prefer m4a for broader browser support; fall back to webm opus.
     const args = [
