@@ -337,26 +337,6 @@ async function runStartupTestSuite() {
 checkYtdlp();
 startCleanupInterval(DOWNLOAD_DIR);
 
-// Temporary Startup Diagnostic
-exec(
-  'python3 -m yt_dlp --cookies /tmp/youtube-cookies.txt --simulate "https://www.youtube.com/watch?v=82-jTNka3uc"',
-  (error, stdout, stderr) => {
-    console.log("=== YT-DLP DIAGNOSTIC START ===");
-    console.log("STDOUT:");
-    console.log(stdout);
-
-    console.log("STDERR:");
-    console.log(stderr);
-
-    if (error) {
-      console.error("ERROR:");
-      console.error(error);
-    }
-
-    console.log("=== YT-DLP DIAGNOSTIC END ===");
-  }
-);
-
 // Start server
 const server = app.listen(PORT, () => {
   console.log(`[Server] Express API server listening on port ${PORT}`);

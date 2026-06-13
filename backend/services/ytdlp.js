@@ -126,37 +126,39 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
     const maxDurationSec = parseInt(process.env.MAX_VIDEO_DURATION_SECONDS || "1200", 10);
     const limitRate = process.env.DOWNLOAD_RATE_LIMIT || "10M";
     const cookiesPath = getYoutubeCookiesPath();
+const args = [
+  "-f",
+  "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+  "--no-playlist",
+  "--no-check-certificates",
+  "--cache-dir",
+  path.join(outputDir, ".cache"), // Ensure writable local cache directory
+  "--no-live", // Reject live streams
+  "--extract-audio",
+  "--audio-format",
+  "mp3",
+  "--audio-quality",
+  "0",
+  "--embed-thumbnail",
+  "--add-metadata",
+  "--max-filesize",
+  maxFileSize,
+  "--match-filter",
+  `duration <= ${maxDurationSec}`,
+  "--limit-rate",
+  limitRate,
+  "--concurrent-fragments",
+  "1", // Reduce throttling risk
+];
 
-    const args = [
-      "-f",
-      "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
-      "--no-playlist",
-      "--cache-dir",
-      path.join(outputDir, ".cache"), // Ensure writable local cache directory
-      "--no-live", // Reject live streams
-      "--extract-audio",
-      "--audio-format",
-      "mp3",
-      "--audio-quality",
-      "0",
-      "--embed-thumbnail",
-      "--add-metadata",
-      "--max-filesize",
-      maxFileSize,
-      "--match-filter",
-      `duration <= ${maxDurationSec}`,
-      "--limit-rate",
-      limitRate,
-    ];
-
-    if (cookiesPath) {
-      args.push("--cookies", cookiesPath);
-    } else {
-      // Only use android client fallback if cookies are NOT present,
-      // as android client doesn't support cookies.
-      args.push("--extractor-args", "youtube:player_client=android");
-    }
-
+if (cookiesPath) {
+  args.push("--cookies", cookiesPath);
+  // ios and web clients are more stable with cookies
+  args.push("--extractor-args", "youtube:player_client=ios,web");
+} else {
+  // Fallback to android if no cookies, but it's less stable for fragments
+  args.push("--extractor-args", "youtube:player_client=android");
+}
     if (FFMPEG_LOCATION) {
       args.push("--ffmpeg-location", FFMPEG_LOCATION);
     }
@@ -214,6 +216,10 @@ export function downloadAudio(videoId, outputDir, onProgress, metadata) {
           const authError = new Error("YouTube cookies may be expired");
           authError.code = "YOUTUBE_AUTH_REQUIRED";
           reject(authError);
+        } else if (errorOutput.toLowerCase().includes("http error 403") || errorOutput.toLowerCase().includes("forbidden")) {
+          const forbiddenError = new Error("YouTube access forbidden (403). Try refreshing cookies.");
+          forbiddenError.code = "YOUTUBE_DOWNLOAD_FORBIDDEN";
+          reject(forbiddenError);
         } else {
           reject(
             new Error(
