@@ -49,6 +49,7 @@ router.get(
     const child = spawnYtDlp(args);
     let contentTypeSet = false;
     let firstChunkReceived = false;
+    let extractionError = "";
 
     const setContentType = (line) => {
       if (contentTypeSet) return;
@@ -83,6 +84,7 @@ router.get(
 
     child.stderr.on("data", (data) => {
       const text = data.toString();
+      extractionError += text;
       console.error(`[Audio Stream stderr] ${text.trim()}`);
       setContentType(text);
     });
@@ -107,6 +109,16 @@ router.get(
       console.log(
         `[Audio Stream] yt-dlp exited with code ${code} for video: ${videoId}`,
       );
+      if (!firstChunkReceived && !res.headersSent) {
+        const requiresAuthentication = /sign in to confirm|cookies are no longer valid/i.test(
+          extractionError,
+        );
+        return res.status(502).json({
+          error: requiresAuthentication
+            ? "YouTube authentication needs to be refreshed."
+            : "YouTube could not provide an audio stream.",
+        });
+      }
       res.end();
     });
 
