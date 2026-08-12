@@ -6,143 +6,126 @@ import { getYoutubeCookiesPath } from "../services/cookieManager.js";
 
 const router = express.Router();
 
+function buildStreamArgs(videoUrl, cookiesPath, useCookies) {
+  const args = [
+    "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
+    "--no-playlist",
+    "--no-check-certificates",
+    "--js-runtimes", "node",
+    "--remote-components", "ejs:github",
+    "-o", "-",
+  ];
+
+  if (useCookies && cookiesPath) {
+    args.push("--cookies", cookiesPath);
+    args.push("--extractor-args", "youtube:player_client=web");
+  } else {
+    args.push("--extractor-args", "youtube:player_client=android");
+  }
+
+  args.push(videoUrl);
+  return args;
+}
+
 router.get(
   "/:videoId",
   [param("videoId").trim().notEmpty().withMessage("Video ID is required")],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const cookiesPath = getYoutubeCookiesPath();
+    const cookiesAvailable = !!(cookiesPath && fs.existsSync(cookiesPath));
 
-    console.log(`[Audio Stream] Streaming real-time audio for video: ${videoId}`);
-    console.log(`[Audio Stream] Cookies enabled: ${!!cookiesPath}`);
-    console.log(`[Audio Stream] Cookie file used: ${cookiesPath}`);
+    console.log(`[Audio Stream] Starting ${videoId}; cookies=${cookiesAvailable}`);
 
-    if (cookiesPath && fs.existsSync(cookiesPath)) {
-      console.log(`[Audio Stream] Cookie file size: ${fs.statSync(cookiesPath).size}`);
-    }
-
-    // Prefer m4a for broader browser support; fall back to webm opus.
-    const args = [
-      "-f",
-      "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
-      "--no-playlist",
-      "--no-check-certificates",
-      "--js-runtimes",
-      "node",
-      "--remote-components",
-      "ejs:github",
-      "-o",
-      "-",
-      videoUrl,
-    ];
-
-    if (cookiesPath && fs.existsSync(cookiesPath)) {
-      args.push("--cookies", cookiesPath);
-      args.push("--extractor-args", "youtube:player_client=web");
-    } else {
-      args.push("--extractor-args", "youtube:player_client=android");
-    }
-
-    console.log(`[Audio Stream] Spawning yt-dlp with args: ${args.join(" ")}`);
-    const child = spawnYtDlp(args);
-    let contentTypeSet = false;
+    let child = null;
     let firstChunkReceived = false;
+    let contentTypeSet = false;
     let extractionError = "";
+    let retriedWithoutCookies = false;
 
     const setContentType = (line) => {
-      if (contentTypeSet) return;
-      
-      // Map common YouTube format IDs to proper MIME types
+      if (contentTypeSet || res.headersSent) return;
       const formatMatch = line.match(/Downloading 1 format\(s\):\s*(\d+)/i);
-      if (formatMatch) {
-        const formatId = formatMatch[1];
-        if (["139", "140"].includes(formatId)) {
-          res.setHeader("Content-Type", "audio/mp4");
-          contentTypeSet = true;
-          console.log(`[Audio Stream] Detected format ID ${formatId}. Set Content-Type to audio/mp4`);
-          return;
-        } else if (["249", "250", "251", "171"].includes(formatId)) {
-          res.setHeader("Content-Type", "audio/webm");
-          contentTypeSet = true;
-          console.log(`[Audio Stream] Detected format ID ${formatId}. Set Content-Type to audio/webm`);
-          return;
-        }
-      }
-
-      if (/\.m4a|audio.?mp4/i.test(line)) {
+      if (formatMatch && ["139", "140"].includes(formatMatch[1])) {
         res.setHeader("Content-Type", "audio/mp4");
         contentTypeSet = true;
-        console.log(`[Audio Stream] Pattern match: Set Content-Type to audio/mp4`);
+      } else if (formatMatch && ["249", "250", "251", "171"].includes(formatMatch[1])) {
+        res.setHeader("Content-Type", "audio/webm");
+        contentTypeSet = true;
+      } else if (/\.m4a|audio.?mp4/i.test(line)) {
+        res.setHeader("Content-Type", "audio/mp4");
+        contentTypeSet = true;
       } else if (/\.webm|audio.?webm/i.test(line)) {
         res.setHeader("Content-Type", "audio/webm");
         contentTypeSet = true;
-        console.log(`[Audio Stream] Pattern match: Set Content-Type to audio/webm`);
       }
     };
 
-    child.stderr.on("data", (data) => {
-      const text = data.toString();
-      extractionError += text;
-      console.error(`[Audio Stream stderr] ${text.trim()}`);
-      setContentType(text);
-    });
+    const start = (useCookies) => {
+      const args = buildStreamArgs(videoUrl, cookiesPath, useCookies);
+      console.log(`[Audio Stream] yt-dlp mode=${useCookies ? "authenticated-web" : "fallback-android"}`);
+      child = spawnYtDlp(args);
+      extractionError = "";
+      firstChunkReceived = false;
 
-    child.stdout.on("data", (data) => {
-      if (!firstChunkReceived) {
-        firstChunkReceived = true;
-        console.log(`[Audio Stream] First audio chunk received (${data.length} bytes)`);
-      }
-      
-      if (!contentTypeSet && !res.headersSent) {
-        // Fallback to audio/mp4 since m4a is the first priority format
-        res.setHeader("Content-Type", "audio/mp4");
-        contentTypeSet = true;
-        console.log("[Audio Stream] Fallback: Set Content-Type to audio/mp4");
-      }
+      child.stderr.on("data", (data) => {
+        const text = data.toString();
+        extractionError += text;
+        console.error(`[Audio Stream stderr] ${text.trim()}`);
+        setContentType(text);
+      });
 
-      res.write(data);
-    });
+      child.stdout.on("data", (data) => {
+        if (!firstChunkReceived) {
+          firstChunkReceived = true;
+          console.log(`[Audio Stream] First audio chunk: ${data.length} bytes`);
+        }
+        if (!contentTypeSet && !res.headersSent) {
+          res.setHeader("Content-Type", "audio/mp4");
+          contentTypeSet = true;
+        }
+        res.write(data);
+      });
 
-    child.on("close", (code) => {
-      console.log(
-        `[Audio Stream] yt-dlp exited with code ${code} for video: ${videoId}`,
-      );
-      if (!firstChunkReceived && !res.headersSent) {
-        const requiresAuthentication = /sign in to confirm|cookies are no longer valid/i.test(
-          extractionError,
-        );
-        return res.status(502).json({
-          error: requiresAuthentication
-            ? "YouTube authentication needs to be refreshed."
-            : "YouTube could not provide an audio stream.",
-        });
-      }
-      res.end();
-    });
+      child.on("close", (code) => {
+        const authFailure = /sign in to confirm|cookies? (are )?(no longer )?valid|authentication needs to be refreshed|not a bot/i.test(extractionError);
+        console.log(`[Audio Stream] yt-dlp exited ${code}; firstChunk=${firstChunkReceived}; authFailure=${authFailure}`);
 
-    child.on("error", (err) => {
-      console.error(`[Audio Stream] Error spawning yt-dlp:`, err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to stream audio" });
-      }
-    });
+        // A stale Render cookie must never permanently break playback. If the
+        // authenticated web client fails before producing bytes, retry once with
+        // the cookie-less Android client, which often works without authentication.
+        if (!firstChunkReceived && !res.headersSent && cookiesAvailable && !retriedWithoutCookies && authFailure) {
+          retriedWithoutCookies = true;
+          console.warn(`[Audio Stream] Authenticated extraction failed; retrying ${videoId} without cookies.`);
+          return start(false);
+        }
 
-    // If user stops playing or closes the tab, kill the child process to save CPU/Network
+        if (!firstChunkReceived && !res.headersSent) {
+          return res.status(502).json({
+            error: authFailure
+              ? "YouTube authentication failed and the fallback client could not provide an audio stream."
+              : "YouTube could not provide an audio stream.",
+          });
+        }
+        if (!res.writableEnded) res.end();
+      });
+
+      child.on("error", (err) => {
+        console.error(`[Audio Stream] yt-dlp spawn error: ${err.message}`);
+        if (!res.headersSent) res.status(500).json({ error: "Failed to stream audio" });
+      });
+    };
+
+    start(cookiesAvailable);
+
     req.on("close", () => {
-      console.log(
-        `[Audio Stream] Connection closed by client. Killing process for video: ${videoId}`,
-      );
       try {
-        child.kill();
-      } catch (err) {
-        // Process might already be dead
-      }
+        if (child && !child.killed) child.kill();
+      } catch {}
     });
   },
 );
