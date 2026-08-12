@@ -1,6 +1,5 @@
 import path from "path";
 import fs from "fs";
-import { downloadAudio } from "./ytdlp.js";
 import { downloadResolvedSource } from "./sourceDownloader.js";
 import metadataClient from "./metadataClient.js";
 
@@ -51,19 +50,22 @@ async function processLocalQueue() {
       if (metadata) { job.metadata = metadata; if (metadata.title) job.title = metadata.title; }
     }
 
-    if (metadata?.duration) {
+    if (!metadata) throw new Error("Song metadata is unavailable; please retry shortly.");
+
+    if (metadata.duration) {
       const seconds = parseDurationToSeconds(metadata.duration);
       if (seconds > MAX_VIDEO_DURATION_MINUTES * 60) throw new Error(`Video exceeds maximum allowed length of ${MAX_VIDEO_DURATION_MINUTES} minutes.`);
     }
 
-    // Prefer an independent/open source. Fall back to the legacy YouTube worker only when no match exists.
-    let result = await downloadResolvedSource(metadata || { videoId: job.videoId, title: job.title }, DOWNLOAD_DIR, (p) => { job.progress = p; });
-    let filePath = result?.filePath;
-    if (!filePath) {
-      filePath = await downloadAudio(job.videoId, DOWNLOAD_DIR, (p) => { job.progress = p; }, metadata);
+    // Production downloads use the independent/open provider pipeline. We do
+    // not silently fall back to YouTube extraction because that path is
+    // datacenter-sensitive and can turn a valid request into a bot-check error.
+    const result = await downloadResolvedSource(metadata, DOWNLOAD_DIR, (p) => { job.progress = p; });
+    if (!result?.filePath) {
+      throw new Error("No downloadable independent audio source matched this song.");
     }
 
-    job.filePath = filePath;
+    job.filePath = result.filePath;
     job.status = "done";
     job.progress = 100;
   } catch (err) {
