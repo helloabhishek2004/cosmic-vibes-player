@@ -6,9 +6,11 @@ import type { Song } from "@/types/song";
 import { toggleTrack, usePlayback } from "@/lib/audio-player";
 
 const SELECTED_SONG_KEY = "dua.mp3:selected-song";
+const PLACEHOLDER = "/placeholder.png";
 
 export function SongCard({ song, onDownload, playlist }: { song: Song; onDownload: (s: Song) => void; playlist?: Song[] }) {
   const { active, status } = usePlayback(song.id);
+  const [imageSrc, setImageSrc] = useState(song.thumbnailUrl || PLACEHOLDER);
   const [loaded, setLoaded] = useState(false);
 
   const rememberSong = () => {
@@ -25,7 +27,18 @@ export function SongCard({ song, onDownload, playlist }: { song: Song; onDownloa
       <Link to="/song/$id" params={{ id: song.id }} onClick={rememberSong} className="block" aria-label={`View ${song.title} by ${song.artist}`}>
         <div className="relative aspect-square rounded-2xl overflow-hidden mb-4">
           {!loaded && <div className="absolute inset-0 shimmer" aria-hidden />}
-          <img src={song.thumbnailUrl} alt={`${song.album} cover`} className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`} loading="lazy" decoding="async" onLoad={() => setLoaded(true)} />
+          <img
+            src={imageSrc}
+            alt={`${song.album} cover`}
+            className={`w-full h-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoaded(true)}
+            onError={() => {
+              if (imageSrc !== PLACEHOLDER) setImageSrc(PLACEHOLDER);
+              setLoaded(true);
+            }}
+          />
           {active && status === "playing" && <div className="absolute inset-0 ring-2 ring-[color:var(--cyan)]/60 rounded-2xl pointer-events-none" />}
           <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} aria-label={active && status === "playing" ? `Pause preview of ${song.title}` : `Play preview of ${song.title}`} onClick={handlePlay} className={`absolute bottom-3 right-3 w-12 h-12 rounded-full gradient-bg flex items-center justify-center shadow-lg transition-opacity ${active ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
             {status === "loading" ? <Loader2 size={18} className="text-white animate-spin" /> : active && status === "playing" ? <Pause size={18} fill="white" className="text-white" /> : <Play size={18} fill="white" className="text-white ml-0.5" />}
