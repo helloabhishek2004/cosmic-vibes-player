@@ -2,6 +2,7 @@ import express from "express";
 import { query, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
 import cache from "../services/cache.js";
+import { searchYouTube } from "../services/youtubeSearch.js";
 
 const router = express.Router();
 
@@ -15,35 +16,32 @@ router.get(
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const queryStr = req.query.q;
+    const queryStr = String(req.query.q).trim();
     const cacheKey = `search:${queryStr.toLowerCase()}`;
-
-    // Check cache
     const cachedData = cache.get(cacheKey);
-    if (cachedData) {
-      console.log(`[Cache Hit] Returning cached results for: ${queryStr}`);
-      return res.json(cachedData);
-    }
+    if (cachedData) return res.json(cachedData);
 
     try {
-      console.log(`[API Call] Searching Python service for: ${queryStr}`);
-      const response = await metadataClient.get("/search", {
-        params: { q: queryStr },
-      });
-
-      const data = response.data || [];
-
-      // Store in cache
-      cache.set(cacheKey, data);
-
-      return res.json(data);
+      console.log(`[Search] YTMusic search: ${queryStr}`);
+      const response = await metadataClient.get("/search", { params: { q: queryStr } });
+      const data = Array.isArray(response.data) ? response.data : [];
+      if (data.length) {
+        cache.set(cacheKey, data);
+        return res.json(data);
+      }
+      throw new Error("YTMusic returned no results");
     } catch (err) {
-      console.error(`Search error calling Python service: ${err.message}`);
-      return res.status(500).json({ error: "Failed to search songs. Python microservice error." });
+      console.warn(`[Search] YTMusic unavailable (${err.response?.status || err.message}); using yt-dlp fallback.`);
+      try {
+        const data = await searchYouTube(queryStr, 20);
+        cache.set(cacheKey, data, 120);
+        return res.json(data);
+      } catch (fallbackErr) {
+        console.error(`[Search] yt-dlp fallback failed: ${fallbackErr.message}`);
+        return res.status(502).json({ error: "Live search is temporarily unavailable. Please retry shortly." });
+      }
     }
   },
 );
