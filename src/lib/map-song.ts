@@ -20,7 +20,7 @@ export function mapApiTrackToSong(item: ApiTrack): Song {
     duration: item.duration || "0:00",
     year: item.year || new Date().getFullYear(),
     genre: ["Music"],
-    thumbnailUrl: item.thumbnail || "/placeholder.png",
+    thumbnailUrl: item.thumbnail || "/placeholder.svg",
     previewUrl: streamUrl(item.videoId),
   };
 }
