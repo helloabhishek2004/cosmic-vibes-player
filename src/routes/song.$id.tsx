@@ -10,6 +10,8 @@ import client from "@/api/client";
 import { streamUrl } from "@/lib/api-base";
 
 const SELECTED_SONG_KEY = "dua.mp3:selected-song";
+const PLACEHOLDER = "/placeholder.svg";
+
 function getRememberedSong(id: string): Song | null {
   if (typeof window === "undefined") return null;
   try {
@@ -19,6 +21,7 @@ function getRememberedSong(id: string): Song | null {
     return song?.id === id ? song : null;
   } catch { return null; }
 }
+
 function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return "0:00";
   return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
@@ -40,7 +43,7 @@ export const Route = createFileRoute("/song/$id")({
         duration: data.duration || remembered?.duration || "0:00",
         year: data.year || remembered?.year || new Date().getFullYear(),
         genre: remembered?.genre?.length ? remembered.genre : ["Music"],
-        thumbnailUrl: data.thumbnail || remembered?.thumbnailUrl || "/placeholder.png",
+        thumbnailUrl: data.thumbnail || remembered?.thumbnailUrl || PLACEHOLDER,
         previewUrl: streamUrl(id),
       } satisfies Song;
     } catch (err: any) {
@@ -62,21 +65,23 @@ export const Route = createFileRoute("/song/$id")({
 function SongPage() {
   const song = Route.useLoaderData();
   const [open, setOpen] = useState(false);
+  const [imageSrc, setImageSrc] = useState(song.thumbnailUrl || PLACEHOLDER);
   const { active, status, errorDetails } = usePlayback(song.id);
   const { currentTime, duration } = useAudioProgress();
   useEffect(() => () => stopAudio(), []);
   const progress = active && duration > 0 ? (currentTime / duration) * 100 : 0;
   const isPlaying = active && status === "playing";
   const isLoading = active && status === "loading";
+
   return (
     <>
       <Starfield />
-      <div aria-hidden className="fixed inset-0 -z-10" style={{ backgroundImage: `url(${song.thumbnailUrl})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(60px) saturate(120%)", opacity: 0.35 }} />
+      <div aria-hidden className="fixed inset-0 -z-10" style={{ backgroundImage: `url(${imageSrc})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(60px) saturate(120%)", opacity: 0.35 }} />
       <div aria-hidden className="fixed inset-0 -z-10 bg-black/60" />
       <main className="min-h-dvh px-4 py-8 pb-32"><div className="max-w-4xl mx-auto">
         <Link to="/" className="inline-flex items-center gap-2 glass rounded-full px-4 py-2 text-sm hover:bg-white/10 transition"><ArrowLeft size={16} /> Back</Link>
         <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="glass rounded-3xl p-6 md:p-10 mt-8 grid md:grid-cols-[280px_1fr] gap-8 items-center">
-          <img src={song.thumbnailUrl} alt={`${song.album} cover`} className="w-full rounded-2xl shadow-2xl aspect-square object-cover" />
+          <img src={imageSrc} onError={() => setImageSrc(PLACEHOLDER)} alt={`${song.album} cover`} className="w-full rounded-2xl shadow-2xl aspect-square object-cover" />
           <div>
             <p className="text-sm uppercase tracking-widest text-muted-foreground">{song.album}</p>
             <h1 className="text-4xl md:text-5xl font-extrabold mt-2">{song.title}</h1>
