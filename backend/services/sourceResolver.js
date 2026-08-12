@@ -1,4 +1,5 @@
 import { resolveAudiusSource, isAudiusConfigured } from "./providers/audius.js";
+import { resolvePipedSource, isPipedConfigured } from "./providers/piped.js";
 
 function parseDuration(value) {
   if (typeof value === "number") return value;
@@ -29,6 +30,18 @@ export async function resolveAudioSource(metadata, { requireDownload = false } =
   const song = toCanonicalSong(metadata);
   const providers = [];
 
+  // Piped resolves the exact YouTube video through a public proxy and does not
+  // depend on browser cookies from the Render datacenter. This is the primary
+  // production path for YouTube-backed songs.
+  if (isPipedConfigured() && song.id) {
+    providers.push({
+      name: "piped",
+      resolve: () => resolvePipedSource(song.id),
+    });
+  }
+
+  // Audius is a genuinely independent open-audio catalog. Prefer it when the
+  // metadata matches strongly enough, especially for downloadable releases.
   if (isAudiusConfigured()) {
     providers.push({
       name: "audius",
@@ -39,7 +52,7 @@ export async function resolveAudioSource(metadata, { requireDownload = false } =
   for (const provider of providers) {
     try {
       const source = await provider.resolve();
-      if (source) return source;
+      if (source && (!requireDownload || source.downloadable)) return source;
     } catch (error) {
       console.warn(`[SourceResolver] ${provider.name} failed: ${error.message}`);
     }
@@ -50,6 +63,9 @@ export async function resolveAudioSource(metadata, { requireDownload = false } =
 
 export function getSourceProviderStatus() {
   return {
+    piped: {
+      configured: isPipedConfigured(),
+    },
     audius: {
       configured: isAudiusConfigured(),
     },
