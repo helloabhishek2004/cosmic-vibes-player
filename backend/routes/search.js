@@ -3,6 +3,7 @@ import { query, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
 import cache from "../services/cache.js";
 import { searchYouTube } from "../services/youtubeSearch.js";
+import { searchPiped } from "../services/providers/piped.js";
 
 const router = express.Router();
 
@@ -23,25 +24,38 @@ router.get(
     const cachedData = cache.get(cacheKey);
     if (cachedData) return res.json(cachedData);
 
+    // YTMusic remains the preferred metadata source when it is healthy.
     try {
       console.log(`[Search] YTMusic search: ${queryStr}`);
-      const response = await metadataClient.get("/search", { params: { q: queryStr } });
+      const response = await metadataClient.get("/search", { params: { q: queryStr }, timeout: 6000 });
       const data = Array.isArray(response.data) ? response.data : [];
       if (data.length) {
         cache.set(cacheKey, data);
         return res.json(data);
       }
-      throw new Error("YTMusic returned no results");
     } catch (err) {
-      console.warn(`[Search] YTMusic unavailable (${err.response?.status || err.message}); using yt-dlp fallback.`);
-      try {
-        const data = await searchYouTube(queryStr, 20);
-        cache.set(cacheKey, data, 120);
+      console.warn(`[Search] YTMusic unavailable (${err.response?.status || err.message}); trying Piped.`);
+    }
+
+    // Piped is the primary datacenter-safe fallback: it returns YouTube search
+    // metadata without requiring browser cookies on this Render instance.
+    try {
+      const data = await searchPiped(queryStr, 20);
+      if (data.length) {
+        cache.set(cacheKey, data, 300);
         return res.json(data);
-      } catch (fallbackErr) {
-        console.error(`[Search] yt-dlp fallback failed: ${fallbackErr.message}`);
-        return res.status(502).json({ error: "Live search is temporarily unavailable. Please retry shortly." });
       }
+    } catch (err) {
+      console.warn(`[Search] Piped unavailable (${err.response?.status || err.message}); trying yt-dlp.`);
+    }
+
+    try {
+      const data = await searchYouTube(queryStr, 20);
+      cache.set(cacheKey, data, 120);
+      return res.json(data);
+    } catch (fallbackErr) {
+      console.error(`[Search] All live search providers failed: ${fallbackErr.message}`);
+      return res.status(502).json({ error: "Live search is temporarily unavailable. Please retry shortly." });
     }
   },
 );
