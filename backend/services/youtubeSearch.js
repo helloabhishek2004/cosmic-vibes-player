@@ -1,15 +1,7 @@
 import { spawnYtDlp } from "./ytdlpSpawn.js";
-import fs from "fs";
-import { getYoutubeCookiesPath } from "./cookieManager.js";
 
 const SEARCH_TIMEOUT_MS = Number(process.env.YTDLP_SEARCH_TIMEOUT_MS || 20000);
 const MAX_RESULTS = Number(process.env.YTDLP_SEARCH_LIMIT || 20);
-
-function cookiesArgs() {
-  const cookiesPath = getYoutubeCookiesPath();
-  if (!cookiesPath || !fs.existsSync(cookiesPath)) return [];
-  return ["--cookies", cookiesPath, "--extractor-args", "youtube:player_client=web"];
-}
 
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
@@ -64,60 +56,40 @@ function mapEntry(entry) {
   };
 }
 
+function searchArgs(count) {
+  return [
+    "--flat-playlist",
+    "--dump-single-json",
+    "--playlist-end", String(count),
+    "--extractor-args", "youtube:player_client=android",
+  ];
+}
+
 export async function searchYouTube(query, limit = MAX_RESULTS) {
   const normalized = String(query || "").trim();
   if (!normalized) return [];
   const count = Math.max(1, Math.min(Number(limit) || 20, 20));
-  const searchArgs = [
-    "--flat-playlist",
-    "--dump-single-json",
-    "--playlist-end", String(count),
-    ...cookiesArgs(),
-    `ytsearch${count}:${normalized}`,
-  ];
 
-  try {
-    const result = await runYtDlp(searchArgs);
-    return (result?.entries || []).map(mapEntry).filter(Boolean).slice(0, count);
-  } catch (firstError) {
-    // Cookie failures should not take search down. Retry without cookies.
-    if (cookiesArgs().length) {
-      console.warn(`[yt-dlp search] Authenticated search failed; retrying without cookies: ${firstError.message}`);
-      try {
-        const result = await runYtDlp([
-          "--flat-playlist",
-          "--dump-single-json",
-          "--playlist-end", String(count),
-          `ytsearch${count}:${normalized}`,
-        ]);
-        return (result?.entries || []).map(mapEntry).filter(Boolean).slice(0, count);
-      } catch (fallbackError) {
-        console.warn(`[yt-dlp search] Cookie-less fallback failed: ${fallbackError.message}`);
-      }
-    }
-    throw firstError;
-  }
+  // Keep search independent from YOUTUBE_COOKIES. Render datacenter requests
+  // with browser cookies are more likely to trigger YouTube's bot challenge.
+  const result = await runYtDlp([
+    ...searchArgs(count),
+    `ytsearch${count}:${normalized}`,
+  ]);
+
+  return (result?.entries || []).map(mapEntry).filter(Boolean).slice(0, count);
 }
 
 export async function getYouTubeMetadata(videoId) {
   const id = String(videoId || "").trim();
   if (!id) return null;
   const url = `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
-  const base = ["--dump-single-json", "--skip-download", "--no-playlist"];
-
-  try {
-    const result = await runYtDlp([...base, ...cookiesArgs(), url]);
-    return mapEntry(result);
-  } catch (firstError) {
-    if (cookiesArgs().length) {
-      console.warn(`[yt-dlp metadata] Authenticated metadata failed for ${id}; retrying without cookies.`);
-      try {
-        const result = await runYtDlp([...base, url]);
-        return mapEntry(result);
-      } catch (fallbackError) {
-        console.warn(`[yt-dlp metadata] Cookie-less fallback failed for ${id}: ${fallbackError.message}`);
-      }
-    }
-    throw firstError;
-  }
+  const result = await runYtDlp([
+    "--dump-single-json",
+    "--skip-download",
+    "--no-playlist",
+    "--extractor-args", "youtube:player_client=android",
+    url,
+  ]);
+  return mapEntry(result);
 }
