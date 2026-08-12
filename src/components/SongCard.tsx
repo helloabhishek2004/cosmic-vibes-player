@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import { Download, Loader2, Pause, Play } from "lucide-react";
 import { useState } from "react";
-import type { Song } from "@/data/songs";
+import type { Song } from "@/types/song";
 import { toggleTrack, usePlayback } from "@/lib/audio-player";
 
 export function SongCard({

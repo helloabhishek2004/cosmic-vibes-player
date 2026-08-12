@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SongCard } from "@/components/SongCard";
 import { SongCardSkeleton } from "@/components/SongCardSkeleton";
-import type { Song } from "@/data/songs";
+import type { Song } from "@/types/song";
 
 function LazySongCard({
   song,

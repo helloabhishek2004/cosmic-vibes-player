@@ -7,7 +7,7 @@ import { Doodles } from "@/components/Doodles";
 import { DownloadModal } from "@/components/DownloadModal";
 import { LazySongGrid } from "@/components/LazySongGrid";
 import { stop } from "@/lib/audio-player";
-import { type Song } from "@/data/songs";
+import { type Song } from "@/types/song";
 import client from "@/api/client";
 import { mapApiTracks } from "@/lib/map-song";
 

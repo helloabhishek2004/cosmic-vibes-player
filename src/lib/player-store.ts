@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Song } from "@/data/songs";
+import type { Song } from "@/types/song";
 
-export type PlaybackStatus = "loading" | "playing" | "idle";
+export type PlaybackStatus = "loading" | "playing" | "idle" | "error";
 
 type StoreListener = () => void;
 
@@ -9,6 +9,7 @@ let audio: HTMLAudioElement | null = null;
 let queue: Song[] = [];
 let queueIndex = -1;
 let status: PlaybackStatus = "idle";
+let errorDetails: { code: string; message: string; videoId: string } | null = null;
 const listeners = new Set<StoreListener>();
 
 function currentTrack(): Song | null {
@@ -25,6 +26,7 @@ function ensureAudio() {
     audio.preload = "none";
     audio.addEventListener("playing", () => {
       status = "playing";
+      errorDetails = null;
       emit();
     });
     audio.addEventListener("waiting", () => {
@@ -53,7 +55,15 @@ function ensureAudio() {
     });
     audio.addEventListener("error", () => {
       console.error("[Player] Playback failed for", audio?.src);
-      status = "idle";
+      const track = currentTrack();
+      status = "error";
+      if (track) {
+        errorDetails = {
+          code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
+          message: "Could not load or play the audio stream.",
+          videoId: track.id,
+        };
+      }
       emit();
     });
   }
@@ -68,6 +78,7 @@ function playIndex(index: number) {
   a.src = track.previewUrl;
   queueIndex = index;
   status = "loading";
+  errorDetails = null;
   emit();
   a.play().catch((err) => {
     console.error("[Player] play() rejected:", err);
@@ -94,7 +105,7 @@ export function playTrack(track: Song, tracks?: Song[]) {
 
 export function toggleTrack(track: Song, tracks?: Song[]) {
   const a = ensureAudio();
-  if (currentTrack()?.id === track.id && status !== "idle") {
+  if (currentTrack()?.id === track.id && (status === "playing" || status === "loading")) {
     a.pause();
     status = "idle";
     emit();
@@ -115,11 +126,16 @@ export function togglePlayPause() {
     return;
   }
 
-  if (status === "idle" && a.src) {
+  if ((status === "idle" || status === "error") && a.src) {
     status = "loading";
+    errorDetails = null;
     emit();
     a.play().catch(() => {
-      status = "idle";
+      status = "error";
+      const t = currentTrack();
+      if (t) {
+        errorDetails = { code: "PLAY_REJECTED", message: "Browser rejected play request.", videoId: t.id };
+      }
       emit();
     });
     return;
@@ -149,6 +165,7 @@ export function stop() {
   if (audio) audio.pause();
   queueIndex = -1;
   status = "idle";
+  errorDetails = null;
   emit();
 }
 
@@ -174,6 +191,7 @@ export function getPlayerSnapshot() {
   return {
     track: currentTrack(),
     status,
+    errorDetails,
     queueIndex,
     queueLength: queue.length,
     hasNext: queueIndex >= 0 && queueIndex < queue.length - 1,
@@ -210,10 +228,11 @@ export function toggle(id: string, src: string) {
 }
 
 export function usePlayback(id: string) {
-  const { track, status: s } = usePlayer();
+  const { track, status: s, errorDetails: err } = usePlayer();
   return {
     active: track?.id === id,
     status: track?.id === id ? s : ("idle" as PlaybackStatus),
+    errorDetails: track?.id === id ? err : null,
   };
 }
 

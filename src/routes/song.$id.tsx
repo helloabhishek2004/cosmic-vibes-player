@@ -11,7 +11,7 @@ import {
   useAudioProgress,
   seek,
 } from "@/lib/audio-player";
-import { type Song } from "@/data/songs";
+import { type Song } from "@/types/song";
 import client from "@/api/client";
 import { streamUrl } from "@/lib/api-base";
 
@@ -37,13 +37,16 @@ export const Route = createFileRoute("/song/$id")({
         duration: data.duration || "0:00",
         year: data.year || new Date().getFullYear(),
         genre: ["Music"],
-        thumbnailUrl: data.thumbnail || "https://picsum.photos/seed/music/600/600",
+        thumbnailUrl: data.thumbnail || "/placeholder.png",
         previewUrl: streamUrl(data.videoId),
       };
       return song;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load song metadata from API:", err);
-      throw notFound();
+      if (err.response?.status === 404) {
+        throw notFound();
+      }
+      throw err;
     }
   },
   head: ({ loaderData }) => ({
@@ -59,6 +62,14 @@ export const Route = createFileRoute("/song/$id")({
   notFoundComponent: () => (
     <div className="min-h-dvh flex items-center justify-center text-muted-foreground">
       Song not found
+    </div>
+  ),
+  errorComponent: ({ error }) => (
+    <div className="min-h-dvh flex flex-col items-center justify-center text-muted-foreground gap-4">
+      <p>Metadata temporarily unavailable.</p>
+      <Link to="/" className="text-purple-400 hover:underline">
+        Return to Home
+      </Link>
     </div>
   ),
 });

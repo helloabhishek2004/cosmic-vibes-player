@@ -1,4 +1,4 @@
-import type { Song } from "@/data/songs";
+import type { Song } from "@/types/song";
 import { streamUrl } from "@/lib/api-base";
 
 export type ApiTrack = {
@@ -20,7 +20,7 @@ export function mapApiTrackToSong(item: ApiTrack): Song {
     duration: item.duration || "0:00",
     year: item.year || new Date().getFullYear(),
     genre: ["Music"],
-    thumbnailUrl: item.thumbnail || "https://picsum.photos/seed/music/600/600",
+    thumbnailUrl: item.thumbnail || "/placeholder.png",
     previewUrl: streamUrl(item.videoId),
   };
 }
