@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { Song } from "@/types/song";
 
 export type PlaybackStatus = "loading" | "playing" | "idle" | "error";
-
 type StoreListener = () => void;
 
 let audio: HTMLAudioElement | null = null;
@@ -15,55 +14,30 @@ const listeners = new Set<StoreListener>();
 function currentTrack(): Song | null {
   return queueIndex >= 0 && queueIndex < queue.length ? queue[queueIndex]! : null;
 }
-
-function emit() {
-  listeners.forEach((l) => l());
-}
+function emit() { listeners.forEach((l) => l()); }
 
 function ensureAudio() {
   if (!audio && typeof window !== "undefined") {
     audio = new Audio();
     audio.preload = "none";
-    audio.addEventListener("playing", () => {
-      status = "playing";
-      errorDetails = null;
-      emit();
-    });
-    audio.addEventListener("waiting", () => {
-      status = "loading";
-      emit();
-    });
+    audio.addEventListener("playing", () => { status = "playing"; errorDetails = null; emit(); });
+    audio.addEventListener("waiting", () => { status = "loading"; emit(); });
     audio.addEventListener("ended", () => {
-      if (queueIndex < queue.length - 1) {
-        playIndex(queueIndex + 1);
-      } else {
-        status = "idle";
-        emit();
-      }
+      if (queueIndex < queue.length - 1) playIndex(queueIndex + 1);
+      else { status = "idle"; emit(); }
     });
-    audio.addEventListener("pause", () => {
-      if (status !== "loading") {
-        status = "idle";
-        emit();
-      }
-    });
-    audio.addEventListener("seeking", () => {
-      emit();
-    });
-    audio.addEventListener("seeked", () => {
-      emit();
-    });
+    audio.addEventListener("pause", () => { if (status !== "loading" && status !== "error") { status = "idle"; emit(); } });
+    audio.addEventListener("seeking", emit);
+    audio.addEventListener("seeked", emit);
     audio.addEventListener("error", () => {
-      console.error("[Player] Playback failed for", audio?.src);
       const track = currentTrack();
+      console.error("[Player] Playback failed for", audio?.src);
       status = "error";
-      if (track) {
-        errorDetails = {
-          code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
-          message: "Could not load or play the audio stream.",
-          videoId: track.id,
-        };
-      }
+      errorDetails = track ? {
+        code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
+        message: "The server could not provide a browser-compatible audio stream.",
+        videoId: track.id,
+      } : null;
       emit();
     });
   }
@@ -82,17 +56,15 @@ function playIndex(index: number) {
   emit();
   a.play().catch((err) => {
     console.error("[Player] play() rejected:", err);
-    status = "idle";
+    status = "error";
+    errorDetails = { code: "PLAY_REJECTED", message: "The audio stream could not be started.", videoId: track.id };
     emit();
   });
 }
 
 export function setQueue(tracks: Song[], startIndex = 0) {
   queue = tracks;
-  if (tracks.length === 0) {
-    stop();
-    return;
-  }
+  if (tracks.length === 0) { stop(); return; }
   playIndex(Math.max(0, Math.min(startIndex, tracks.length - 1)));
 }
 
@@ -118,56 +90,29 @@ export function togglePlayPause() {
   const a = ensureAudio();
   const track = currentTrack();
   if (!track) return;
-
-  if (status === "playing") {
-    a.pause();
-    status = "idle";
-    emit();
-    return;
-  }
-
+  if (status === "playing") { a.pause(); status = "idle"; emit(); return; }
   if ((status === "idle" || status === "error") && a.src) {
     status = "loading";
     errorDetails = null;
     emit();
-    a.play().catch(() => {
+    a.play().catch((err) => {
+      console.error("[Player] retry rejected:", err);
       status = "error";
-      const t = currentTrack();
-      if (t) {
-        errorDetails = { code: "PLAY_REJECTED", message: "Browser rejected play request.", videoId: t.id };
-      }
+      errorDetails = { code: "PLAY_REJECTED", message: "The audio stream could not be started.", videoId: track.id };
       emit();
     });
     return;
   }
-
   playIndex(queueIndex);
 }
 
-export function playNext() {
-  if (queueIndex < queue.length - 1) {
-    playIndex(queueIndex + 1);
-  }
-}
-
+export function playNext() { if (queueIndex < queue.length - 1) playIndex(queueIndex + 1); }
 export function playPrev() {
   const a = ensureAudio();
-  if (a.currentTime > 3 && status === "playing") {
-    a.currentTime = 0;
-    return;
-  }
-  if (queueIndex > 0) {
-    playIndex(queueIndex - 1);
-  }
+  if (a.currentTime > 3 && status === "playing") { a.currentTime = 0; return; }
+  if (queueIndex > 0) playIndex(queueIndex - 1);
 }
-
-export function stop() {
-  if (audio) audio.pause();
-  queueIndex = -1;
-  status = "idle";
-  errorDetails = null;
-  emit();
-}
+export function stop() { if (audio) audio.pause(); queueIndex = -1; status = "idle"; errorDetails = null; emit(); }
 
 export function useAudioProgress() {
   const [state, setState] = useState({ currentTime: 0, duration: 0 });
@@ -175,10 +120,7 @@ export function useAudioProgress() {
     const a = ensureAudio();
     let raf = 0;
     const loop = () => {
-      setState({
-        currentTime: a.currentTime || 0,
-        duration: Number.isFinite(a.duration) ? a.duration : 0,
-      });
+      setState({ currentTime: a.currentTime || 0, duration: Number.isFinite(a.duration) ? a.duration : 0 });
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -188,99 +130,36 @@ export function useAudioProgress() {
 }
 
 export function getPlayerSnapshot() {
-  return {
-    track: currentTrack(),
-    status,
-    errorDetails,
-    queueIndex,
-    queueLength: queue.length,
-    hasNext: queueIndex >= 0 && queueIndex < queue.length - 1,
-    hasPrev: queueIndex > 0,
-  };
+  return { track: currentTrack(), status, errorDetails, queueIndex, queueLength: queue.length, hasNext: queueIndex >= 0 && queueIndex < queue.length - 1, hasPrev: queueIndex > 0 };
 }
-
 export function usePlayer() {
   const [, tick] = useState(0);
-  useEffect(() => {
-    const l = () => tick((n) => n + 1);
-    listeners.add(l);
-    return () => {
-      listeners.delete(l);
-    };
-  }, []);
+  useEffect(() => { const l = () => tick((n) => n + 1); listeners.add(l); return () => { listeners.delete(l); }; }, []);
   return getPlayerSnapshot();
 }
-
-/** @deprecated Use toggleTrack / usePlayer */
 export function toggle(id: string, src: string) {
-  const track = queue.find((t) => t.id === id) ?? {
-    id,
-    title: "",
-    artist: "",
-    album: "",
-    duration: "",
-    year: 0,
-    genre: [],
-    thumbnailUrl: "",
-    previewUrl: src,
-  };
+  const track = queue.find((t) => t.id === id) ?? { id, title: "", artist: "", album: "", duration: "", year: 0, genre: [], thumbnailUrl: "", previewUrl: src };
   toggleTrack(track);
 }
-
 export function usePlayback(id: string) {
   const { track, status: s, errorDetails: err } = usePlayer();
-  return {
-    active: track?.id === id,
-    status: track?.id === id ? s : ("idle" as PlaybackStatus),
-    errorDetails: track?.id === id ? err : null,
-  };
+  return { active: track?.id === id, status: track?.id === id ? s : ("idle" as PlaybackStatus), errorDetails: track?.id === id ? err : null };
 }
-
-export function seek(time: number) {
-  const a = ensureAudio();
-  if (!isNaN(time) && isFinite(time)) {
-    a.currentTime = time;
-    emit();
-  }
-}
-
-export function getPlaybackPosition() {
-  return audio ? audio.currentTime : 0;
-}
-
-export function getDuration() {
-  return audio ? audio.duration : 0;
-}
-
+export function seek(time: number) { const a = ensureAudio(); if (!isNaN(time) && isFinite(time)) { a.currentTime = time; emit(); } }
+export function getPlaybackPosition() { return audio ? audio.currentTime : 0; }
+export function getDuration() { return audio ? audio.duration : 0; }
 export function usePlaybackPosition() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-
   useEffect(() => {
     const a = ensureAudio();
-
-    const handleTimeUpdate = () => {
-      setPosition(a.currentTime);
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(a.duration);
-    };
-
-    const handleDurationChange = () => {
-      setDuration(a.duration);
-    };
-
+    const handleTimeUpdate = () => setPosition(a.currentTime);
+    const handleLoadedMetadata = () => setDuration(a.duration);
+    const handleDurationChange = () => setDuration(a.duration);
     a.addEventListener("timeupdate", handleTimeUpdate);
     a.addEventListener("loadedmetadata", handleLoadedMetadata);
     a.addEventListener("durationchange", handleDurationChange);
-
-    return () => {
-      a.removeEventListener("timeupdate", handleTimeUpdate);
-      a.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      a.removeEventListener("durationchange", handleDurationChange);
-    };
+    return () => { a.removeEventListener("timeupdate", handleTimeUpdate); a.removeEventListener("loadedmetadata", handleLoadedMetadata); a.removeEventListener("durationchange", handleDurationChange); };
   }, []);
-
   return { position, duration };
 }
