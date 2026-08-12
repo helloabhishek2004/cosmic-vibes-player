@@ -1,6 +1,7 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
+import { getPipedMetadata } from "../services/providers/piped.js";
 import { getYouTubeMetadata } from "../services/youtubeSearch.js";
 
 const router = express.Router();
@@ -16,10 +17,17 @@ router.get(
 
     try {
       console.log(`[API Call] Fetching song from Python service: ${videoId}`);
-      const response = await metadataClient.get(`/song/${videoId}`);
+      const response = await metadataClient.get(`/song/${videoId}`, { timeout: 5000 });
       if (response.data) return res.json(response.data);
     } catch (err) {
-      console.warn(`[Song] Python metadata unavailable (${err.response?.status || err.message}); using yt-dlp fallback.`);
+      console.warn(`[Song] Python metadata unavailable (${err.response?.status || err.message}); using Piped fallback.`);
+    }
+
+    try {
+      const piped = await getPipedMetadata(videoId);
+      if (piped) return res.json(piped);
+    } catch (err) {
+      console.warn(`[Song] Piped metadata unavailable for ${videoId}: ${err.message}`);
     }
 
     try {
@@ -27,7 +35,7 @@ router.get(
       if (!fallback) return res.status(404).json({ error: "Song not found" });
       return res.json(fallback);
     } catch (fallbackErr) {
-      console.error(`[Song] yt-dlp metadata fallback failed: ${fallbackErr.message}`);
+      console.error(`[Song] All metadata providers failed: ${fallbackErr.message}`);
       return res.status(502).json({ error: "Song metadata is temporarily unavailable." });
     }
   },
