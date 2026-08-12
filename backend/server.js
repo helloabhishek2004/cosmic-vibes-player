@@ -288,6 +288,19 @@ async function runStartupTestSuite() {
   const ytdlpOk = await checkYtDlpExists();
   console.log(`[Test Suite] 3. yt-dlp executable: ${ytdlpOk ? "PASS" : "FAIL"}`);
 
+  const nodeOk = await checkCommandExists("node");
+  console.log(`[Test Suite] 4. Node.js runtime available: ${nodeOk ? "PASS" : "FAIL"}`);
+
+  let jsRuntimesOk = false;
+  if (ytdlpOk) {
+    jsRuntimesOk = await new Promise((resolve) => {
+      exec(`${PYTHON} -m yt_dlp --js-runtimes node --version`, { timeout: 10000 }, (error) => {
+        resolve(!error);
+      });
+    });
+  }
+  console.log(`[Test Suite] 5. yt-dlp --js-runtimes node support: ${jsRuntimesOk ? "PASS" : "FAIL"}`);
+
   let ytdlpMetadataOk = false;
   if (ytdlpOk) {
     ytdlpMetadataOk = await new Promise((resolve) => {

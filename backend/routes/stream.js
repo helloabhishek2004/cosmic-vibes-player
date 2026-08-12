@@ -33,14 +33,18 @@ router.get(
       "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
       "--no-playlist",
       "--no-check-certificates",
+      "--js-runtimes",
+      "node",
+      "--remote-components",
+      "ejs:github",
       "-o",
       "-",
       videoUrl,
     ];
 
-    if (cookiesPath) {
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
       args.push("--cookies", cookiesPath);
-      args.push("--extractor-args", "youtube:player_client=ios,web");
+      args.push("--extractor-args", "youtube:player_client=web");
     } else {
       args.push("--extractor-args", "youtube:player_client=android");
     }

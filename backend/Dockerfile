@@ -8,10 +8,12 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp globally (upgrade to latest stable)
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U yt-dlp
-# Verify dependencies during build - fails build if any are missing
-RUN ffmpeg -version && ffprobe -version && python3 -m yt_dlp --version
+# Install yt-dlp[default] globally (upgrade to latest stable)
+RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]"
+# Verify dependencies and EJS challenge solver support during build - fails build if any are missing
+RUN ffmpeg -version && ffprobe -version && node --version && python3 --version && python3 -m yt_dlp --version && python3 -m yt_dlp --js-runtimes node --version
+# Pre-fetch EJS challenge solver component for yt-dlp
+RUN python3 -m yt_dlp --js-runtimes node --remote-components ejs:github --version
 
 # Set working directory
 WORKDIR /usr/src/app
