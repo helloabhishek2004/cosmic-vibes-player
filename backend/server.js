@@ -135,6 +135,10 @@ function checkYtdlp() {
 
 // Start up the Express Server
 const app = express();
+
+// Trust proxy for Render/Vercel (fixes express-rate-limit warning)
+app.set("trust proxy", 1);
+
 const PORT = process.env.PORT || 3001;
 
 // Parse allowed origins from environment

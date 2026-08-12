@@ -15,7 +15,7 @@ services:
       - key: PYTHON_SERVICE_URL
         value: https://cosmic-vibes-metadata.onrender.com # Replace with your deployed metadata service URL
       - key: FRONTEND_URL
-        value: https://cosmic-vibes-player.vercel.app # Replace with your Vercel frontend URL
+        value: https://duamp3.vercel.app
       - key: REDIS_URL
         sync: false # Set this if QUEUE_MODE is changed to redis
       - key: MAX_CONCURRENT_JOBS

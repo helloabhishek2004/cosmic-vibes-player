@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import { param, validationResult } from "express-validator";
 import { spawnYtDlp } from "../services/ytdlpSpawn.js";
 import { getYoutubeCookiesPath } from "../services/cookieManager.js";

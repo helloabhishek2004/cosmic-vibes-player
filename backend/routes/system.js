@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import { exec } from "child_process";
 import { getFFmpegLocation } from "../services/ytdlp.js";
 import { getYoutubeCookiesPath } from "../services/cookieManager.js";
@@ -75,7 +76,7 @@ router.get("/youtube", async (req, res) => {
 
     res.json({
       cookiesConfigured: !!cookiesPath,
-      cookiesFileExists: !!cookiesPath,
+      cookiesFileExists: !!cookiesPath && fs.existsSync(cookiesPath),
       ytdlpInstalled: hasYtdlp,
     });
   } catch (err) {

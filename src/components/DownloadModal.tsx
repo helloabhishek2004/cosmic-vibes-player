@@ -48,7 +48,7 @@ export function DownloadModal({
       const errorObj = err as { response?: { data?: { error?: string } } };
       const message =
         errorObj.response?.data?.error ||
-        "Download service unavailable. Make sure Redis and backend are running.";
+        "Download service is temporarily unavailable. Please try again shortly.";
       handleFailure(message);
     }
   };
@@ -98,7 +98,11 @@ export function DownloadModal({
       const rawContentType = headers?.["content-type"] ?? headers?.["Content-Type"];
       const contentType =
         typeof rawContentType === "string" ? rawContentType : String(rawContentType ?? "");
-      const ext = contentType.includes("webm") ? ".webm" : ".m4a";
+      const ext = contentType.includes("mpeg")
+        ? ".mp3"
+        : contentType.includes("webm")
+          ? ".webm"
+          : ".m4a";
       a.download = `${songTitle}${ext}`;
       a.click();
       window.URL.revokeObjectURL(url);

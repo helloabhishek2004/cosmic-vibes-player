@@ -1,5 +1,5 @@
 # Use a slim Debian-based Node.js image
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 # Install system dependencies: python3, python3-pip, and ffmpeg
 RUN apt-get update && apt-get install -y \
@@ -37,10 +37,3 @@ EXPOSE 3001
 
 # Run the server
 CMD ["node", "server.js"]
-# Install yt-dlp globally
-RUN python3 -m pip install --no-cache-dir -U yt-dlp
-
-# Verify dependencies
-RUN ffmpeg -version && \
-    ffprobe -version && \
-    python3 -m yt_dlp --version
