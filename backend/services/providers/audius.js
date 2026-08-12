@@ -2,10 +2,11 @@ import axios from "axios";
 
 const API_BASE = "https://api.audius.co/v1";
 const API_KEY = process.env.AUDIUS_API_KEY || "";
+const BEARER_TOKEN = process.env.AUDIUS_BEARER_TOKEN || "";
 const TIMEOUT_MS = 8000;
 
 function authHeaders() {
-  return API_KEY ? { Authorization: `Bearer ${process.env.AUDIUS_BEARER_TOKEN || API_KEY}` } : {};
+  return BEARER_TOKEN ? { Authorization: `Bearer ${BEARER_TOKEN}` } : {};
 }
 
 function normalize(value = "") {
@@ -48,7 +49,9 @@ function durationSimilarity(a, b) {
 }
 
 export function isAudiusConfigured() {
-  return Boolean(API_KEY);
+  // Audius currently allows read-only catalog access without credentials.
+  // An API key/bearer token can be added later for higher limits/authenticated use.
+  return true;
 }
 
 export function scoreAudiusCandidate(song, track) {
@@ -69,8 +72,6 @@ export function scoreAudiusCandidate(song, track) {
 }
 
 export async function searchAudiusTracks(song, { limit = 10, downloadableOnly = false } = {}) {
-  if (!API_KEY) return [];
-
   const query = [song.title, song.artist].filter(Boolean).join(" ").trim();
   if (!query) return [];
 
@@ -80,6 +81,7 @@ export async function searchAudiusTracks(song, { limit = 10, downloadableOnly = 
     sort_method: "relevant",
   };
   if (downloadableOnly) params.only_downloadable = "true";
+  if (API_KEY) params.api_key = API_KEY;
 
   try {
     const response = await axios.get(`${API_BASE}/tracks/search`, {
@@ -95,8 +97,6 @@ export async function searchAudiusTracks(song, { limit = 10, downloadableOnly = 
 }
 
 export async function resolveAudiusSource(song, { requireDownload = false } = {}) {
-  if (!API_KEY) return null;
-
   const tracks = await searchAudiusTracks(song, {
     limit: 10,
     downloadableOnly: requireDownload,
@@ -126,7 +126,7 @@ export async function resolveAudiusSource(song, { requireDownload = false } = {}
       song.thumbnailUrl ||
       "",
     mimeType: "audio/mpeg",
-    streamUrl: `${API_BASE}/tracks/${encodeURIComponent(best.track.id)}/stream`,
+    streamUrl: `${API_BASE}/tracks/${encodeURIComponent(best.track.id)}/stream${API_KEY ? `?api_key=${encodeURIComponent(API_KEY)}` : ""}`,
     downloadable: Boolean(best.track.downloadable),
     license: best.track.license || null,
     matchScore: Number(best.score.toFixed(3)),
@@ -135,6 +135,6 @@ export async function resolveAudiusSource(song, { requireDownload = false } = {}
 }
 
 export async function getAudiusTrackStreamUrl(trackId) {
-  if (!API_KEY || !trackId) return null;
-  return `${API_BASE}/tracks/${encodeURIComponent(trackId)}/stream`;
+  if (!trackId) return null;
+  return `${API_BASE}/tracks/${encodeURIComponent(trackId)}/stream${API_KEY ? `?api_key=${encodeURIComponent(API_KEY)}` : ""}`;
 }
