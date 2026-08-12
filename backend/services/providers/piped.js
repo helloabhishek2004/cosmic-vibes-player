@@ -2,7 +2,6 @@ import axios from "axios";
 
 // Public Piped instances are interchangeable API/proxy frontends. We keep a
 // small ordered pool so one unhealthy instance does not take playback down.
-// The pool is intentionally easy to extend when an instance disappears.
 const INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://pipedapi.leptons.xyz",
@@ -75,6 +74,14 @@ export async function searchPiped(query, limit = 20) {
     q: normalized,
     filter: "music_songs",
   });
+  return (Array.isArray(response.data) ? response.data : [])
+    .map(mapSearchItem)
+    .filter(Boolean)
+    .slice(0, Math.max(1, Math.min(Number(limit) || 20, 20)));
+}
+
+export async function requestPipedTrending(region = "IN", limit = 20) {
+  const response = await request("/trending", { region: String(region || "IN").toUpperCase() });
   return (Array.isArray(response.data) ? response.data : [])
     .map(mapSearchItem)
     .filter(Boolean)
