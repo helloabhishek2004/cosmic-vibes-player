@@ -11,7 +11,7 @@ import { type Song } from "@/types/song";
 import client from "@/api/client";
 import { mapApiTracks } from "@/lib/map-song";
 
-const SEARCH_DEBOUNCE_MS = 280;
+const SEARCH_DEBOUNCE_MS = 600;
 
 export const Route = createFileRoute("/")({
   head: () => ({
