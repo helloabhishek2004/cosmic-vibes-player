@@ -101,9 +101,9 @@ router.get(
         contentTypeSet = true;
         console.log("[Audio Stream] Fallback: Set Content-Type to audio/mp4");
       }
-    });
 
-    child.stdout.pipe(res);
+      res.write(data);
+    });
 
     child.on("close", (code) => {
       console.log(
