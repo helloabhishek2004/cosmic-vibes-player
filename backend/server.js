@@ -29,15 +29,18 @@ function validateEnv() {
     errors.push(`PORT must be a valid number between 1 and 65535. Got: "${process.env.PORT}"`);
   }
 
-  // 2. Validate PYTHON_SERVICE_URL
-  const pythonUrlVal = process.env.PYTHON_SERVICE_URL || "http://localhost:8001";
+  // 2. Validate METADATA_SERVICE_URL
+  const pythonUrlVal =
+    process.env.METADATA_SERVICE_URL ||
+    process.env.PYTHON_SERVICE_URL ||
+    "https://cosmic-vibes-metadata.onrender.com";
   try {
     const url = new URL(pythonUrlVal);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      errors.push(`PYTHON_SERVICE_URL protocol must be http or https. Got: "${pythonUrlVal}"`);
+      errors.push(`METADATA_SERVICE_URL protocol must be http or https. Got: "${pythonUrlVal}"`);
     }
   } catch {
-    errors.push(`PYTHON_SERVICE_URL is not a valid URL. Got: "${pythonUrlVal}"`);
+    errors.push(`METADATA_SERVICE_URL is not a valid URL. Got: "${pythonUrlVal}"`);
   }
 
   // 3. Validate DOWNLOAD_DIR
@@ -76,7 +79,7 @@ function validateEnv() {
 
   console.log("[System Check] Startup environment validation successful.");
   console.log(` - PORT: ${portVal}`);
-  console.log(` - PYTHON_SERVICE_URL: ${pythonUrlVal}`);
+  console.log(` - METADATA_SERVICE_URL: ${pythonUrlVal}`);
   console.log(` - DOWNLOAD_DIR: ${downloadPath}`);
   console.log(` - QUEUE_MODE: ${queueModeVal}`);
 

@@ -128,7 +128,7 @@ Open the URL Vite prints (usually **http://localhost:5173**). The `--host` flag 
 | Variable              | Default                  | Description              |
 | --------------------- | ------------------------ | ------------------------ |
 | `PORT`                | `3001`                   | Express API port         |
-| `PYTHON_SERVICE_URL`  | `http://localhost:8001`  | Metadata microservice    |
+| `METADATA_SERVICE_URL`  | `https://cosmic-vibes-metadata.onrender.com`  | Metadata microservice    |
 | `REDIS_URL`           | `redis://localhost:6379` | Bull queue / Redis       |
 | `DOWNLOAD_DIR`        | `downloads`              | Folder for finished MP3s |
 | `MAX_CONCURRENT_JOBS` | `3`                      | Parallel yt-dlp jobs     |

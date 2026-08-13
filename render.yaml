@@ -12,7 +12,7 @@ services:
         value: local # Default to local (no-Redis) fallback to run on Render Free Tier easily
       - key: DOWNLOAD_DIR
         value: downloads
-      - key: PYTHON_SERVICE_URL
+      - key: METADATA_SERVICE_URL
         value: https://cosmic-vibes-metadata.onrender.com # Replace with your deployed metadata service URL
       - key: FRONTEND_URL
         value: https://duamp3.vercel.app

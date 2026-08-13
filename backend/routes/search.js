@@ -2,6 +2,7 @@ import express from "express";
 import { query, validationResult } from "express-validator";
 import cache from "../services/cache.js";
 import { searchPiped } from "../services/providers/piped.js";
+import metadataClient from "../services/metadataClient.js";
 
 const router = express.Router();
 const CACHE_TTL = 300;
@@ -34,10 +35,27 @@ router.get(
 
       return res.status(404).json({ error: "No music results found." });
     } catch (err) {
-      console.error(`[Search] Piped search failed: ${err.response?.status || err.code || err.message}`);
-      return res.status(502).json({
-        error: "Live search is temporarily unavailable. Please retry shortly.",
-      });
+      console.warn(`[Search] Piped failed, attempting metadata fallback...`);
+
+      try {
+        const metadataRes = await metadataClient.get(`/search`, {
+          params: { q: queryStr },
+        });
+
+        const data = metadataRes.data;
+        if (data && data.length) {
+          console.log("[Search] Metadata fallback succeeded");
+          cache.set(cacheKey, data, CACHE_TTL);
+          return res.json(data);
+        }
+
+        return res.status(404).json({ error: "No music results found." });
+      } catch (fallbackErr) {
+        console.error(`[Search] Metadata fallback failed: ${fallbackErr.response?.status || fallbackErr.code || fallbackErr.message}`);
+        return res.status(502).json({
+          error: "Live search is temporarily unavailable. Please retry shortly.",
+        });
+      }
     }
   },
 );

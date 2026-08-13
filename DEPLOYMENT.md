@@ -77,7 +77,7 @@ The backend runs Express, handles download queues, runs the download worker (yt-
    - `NODE_ENV`: `production`
    - `QUEUE_MODE`: `local` _(default for Free tier; automatically falls back if Redis is not configured)_
    - `DOWNLOAD_DIR`: `downloads`
-   - `PYTHON_SERVICE_URL`: `https://cosmic-vibes-metadata.onrender.com` _(use your actual URL from Step 1)_
+   - `METADATA_SERVICE_URL`: `https://cosmic-vibes-metadata.onrender.com` _(use your actual URL from Step 1)_
    - `FRONTEND_URL`: `https://cosmic-vibes-player.vercel.app` _(use your actual Vercel URL)_
    - `MAX_CONCURRENT_JOBS`: `2` _(limits concurrent downloads to prevent Free Tier Out-Of-Memory)_
    - `MAX_VIDEO_DURATION_MINUTES`: `20` _(prevents long downloads)_

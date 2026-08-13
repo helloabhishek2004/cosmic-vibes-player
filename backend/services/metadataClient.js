@@ -3,10 +3,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || "http://localhost:8001";
+const METADATA_SERVICE_URL =
+  process.env.METADATA_SERVICE_URL ||
+  process.env.PYTHON_SERVICE_URL ||
+  "https://cosmic-vibes-metadata.onrender.com";
 
 const metadataClient = axios.create({
-  baseURL: PYTHON_SERVICE_URL,
+  baseURL: METADATA_SERVICE_URL,
   timeout: 10000, // 10s timeout
 });
 
