@@ -1,8 +1,9 @@
 import axios from "axios";
 
-// Public Piped instances are interchangeable API/proxy frontends. We keep a
-// small ordered pool so one unhealthy instance does not take playback down.
-const INSTANCES = [
+// Discovery must not depend on a single public proxy. Piped documents a public
+// instance pool and recommends keeping it current; these are current public
+// instances with a second provider (Invidious) as a failure boundary.
+const PIPED_INSTANCES = [
   "https://pipedapi.kavin.rocks",
   "https://pipedapi.leptons.xyz",
   "https://pipedapi.nosebs.ru",
@@ -10,9 +11,20 @@ const INSTANCES = [
   "https://piped-api.privacy.com.de",
   "https://pipedapi.adminforge.de",
   "https://api.piped.yt",
+  "https://pipedapi.drgns.space",
+  "https://pipedapi.owo.si",
+  "https://pipedapi.ducks.party",
+];
+
+const INVIDIOUS_INSTANCES = [
+  "https://inv.nadeko.net",
+  "https://invidious.nerdvpn.de",
+  "https://yt.chocolatemoo53.com",
+  "https://invidious.tiekoetter.com",
 ];
 
 const TIMEOUT_MS = Number(process.env.PIPED_TIMEOUT_MS || 7000);
+const MAX_LIMIT = 20;
 
 function normalize(value = "") {
   return String(value).toLowerCase().replace(/\s+/g, " ").trim();
@@ -20,7 +32,7 @@ function normalize(value = "") {
 
 function parseVideoId(value = "") {
   const text = String(value || "");
-  const match = text.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || text.match(/\/watch\/([a-zA-Z0-9_-]{11})/);
+  const match = text.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || text.match(/\/watch(?:\.php)?\/([a-zA-Z0-9_-]{11})/);
   return match?.[1] || null;
 }
 
@@ -30,68 +42,126 @@ function parseDuration(seconds) {
   return `${Math.floor(total / 60)}:${String(Math.floor(total % 60)).padStart(2, "0")}`;
 }
 
-async function request(path, params = {}) {
+function limitValue(limit) {
+  return Math.max(1, Math.min(Number(limit) || MAX_LIMIT, MAX_LIMIT));
+}
+
+async function requestFromPool(instances, path, params = {}, label = "Provider") {
   let lastError = null;
-  for (const base of INSTANCES) {
+  for (const base of instances) {
     try {
       const response = await axios.get(`${base}${path}`, {
         params,
         timeout: TIMEOUT_MS,
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", "User-Agent": "CosmicVibes/1.0" },
       });
       return { data: response.data, base };
     } catch (error) {
       lastError = error;
-      console.warn(`[Piped] ${base} failed for ${path}: ${error.response?.status || error.code || error.message}`);
+      console.warn(`[${label}] ${base} failed for ${path}: ${error.response?.status || error.code || error.message}`);
     }
   }
-  throw lastError || new Error("No Piped instance available");
+  throw lastError || new Error(`No ${label} instance available`);
+}
+
+function asArray(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.videos)) return data.videos;
+  return [];
 }
 
 function mapSearchItem(item) {
-  const videoId = parseVideoId(item?.url) || item?.id;
+  const videoId = parseVideoId(item?.url) || item?.id || item?.videoId;
   if (!videoId) return null;
-  const duration = Number(item.duration) || 0;
+  const duration = Number(item.duration ?? item.lengthSeconds) || 0;
+  const thumbnail = item.thumbnail || item.thumbnailUrl || item.videoThumbnails?.find((t) => t?.quality === "medium")?.url || item.videoThumbnails?.[0]?.url || "";
   return {
     videoId,
     title: item.title || "Unknown Title",
-    artist: item.uploaderName || item.uploader || "Unknown Artist",
+    artist: item.uploaderName || item.uploader || item.author || "Unknown Artist",
     album: "Single",
     duration: parseDuration(duration),
-    thumbnail: item.thumbnail || item.thumbnailUrl || "",
+    thumbnail,
     year: item.uploadDate ? Number(String(item.uploadDate).slice(0, 4)) || null : null,
   };
 }
 
-export function isPipedConfigured() {
-  return INSTANCES.length > 0;
+function hasUsefulResults(data) {
+  return asArray(data).some((item) => parseVideoId(item?.url) || item?.id || item?.videoId);
 }
 
-export async function searchPiped(query, limit = 20) {
+export function isPipedConfigured() {
+  return PIPED_INSTANCES.length > 0;
+}
+
+async function searchInvidious(query, limit) {
+  const response = await requestFromPool(INVIDIOUS_INSTANCES, "/api/v1/search", {
+    q: query,
+    type: "video",
+    region: "IN",
+  }, "Invidious");
+  return asArray(response.data).map(mapSearchItem).filter(Boolean).slice(0, limitValue(limit));
+}
+
+export async function searchPiped(query, limit = MAX_LIMIT) {
   const normalized = normalize(query);
   if (!normalized) return [];
-  const response = await request("/search", {
-    q: normalized,
-    filter: "music_songs",
-  });
-  return (Array.isArray(response.data) ? response.data : [])
-    .map(mapSearchItem)
-    .filter(Boolean)
-    .slice(0, Math.max(1, Math.min(Number(limit) || 20, 20)));
+  const capped = limitValue(limit);
+
+  // Prefer music results, but fall back to the general Piped search because
+  // some instances temporarily disable or mishandle the music_songs filter.
+  try {
+    const response = await requestFromPool(PIPED_INSTANCES, "/search", {
+      q: normalized,
+      filter: "music_songs",
+    }, "Piped");
+    const musicResults = asArray(response.data).map(mapSearchItem).filter(Boolean).slice(0, capped);
+    if (musicResults.length) return musicResults;
+  } catch (error) {
+    console.warn(`[Piped] music search unavailable: ${error.message}`);
+  }
+
+  try {
+    const response = await requestFromPool(PIPED_INSTANCES, "/search", {
+      q: normalized,
+      filter: "all",
+    }, "Piped");
+    const results = asArray(response.data).map(mapSearchItem).filter(Boolean).slice(0, capped);
+    if (results.length) return results;
+  } catch (error) {
+    console.warn(`[Piped] general search unavailable: ${error.message}`);
+  }
+
+  // Independent provider fallback. Search remains functional even if every
+  // Piped instance is blocked/down from Render's egress IP.
+  return searchInvidious(normalized, capped);
 }
 
-export async function requestPipedTrending(region = "IN", limit = 20) {
-  const response = await request("/trending", { region: String(region || "IN").toUpperCase() });
-  return (Array.isArray(response.data) ? response.data : [])
-    .map(mapSearchItem)
-    .filter(Boolean)
-    .slice(0, Math.max(1, Math.min(Number(limit) || 20, 20)));
+export async function requestPipedTrending(region = "IN", limit = MAX_LIMIT) {
+  const capped = limitValue(limit);
+
+  try {
+    const response = await requestFromPool(PIPED_INSTANCES, "/trending", {
+      region: String(region || "IN").toUpperCase(),
+    }, "Piped");
+    const results = asArray(response.data).map(mapSearchItem).filter(Boolean).slice(0, capped);
+    if (results.length) return results;
+  } catch (error) {
+    console.warn(`[Piped] trending unavailable: ${error.message}`);
+  }
+
+  // Invidious trending is the independent fallback for the home page.
+  const response = await requestFromPool(INVIDIOUS_INSTANCES, "/api/v1/trending", {
+    region: String(region || "IN").toUpperCase(),
+  }, "Invidious");
+  return asArray(response.data).map(mapSearchItem).filter(Boolean).slice(0, capped);
 }
 
 export async function getPipedMetadata(videoId) {
   const id = String(videoId || "").trim();
   if (!id) return null;
-  const response = await request(`/streams/${encodeURIComponent(id)}`);
+  const response = await requestFromPool(PIPED_INSTANCES, `/streams/${encodeURIComponent(id)}`, {}, "Piped");
   const data = response.data || {};
   return {
     videoId: id,
@@ -107,7 +177,7 @@ export async function getPipedMetadata(videoId) {
 export async function resolvePipedSource(videoId) {
   const id = String(videoId || "").trim();
   if (!id) return null;
-  const response = await request(`/streams/${encodeURIComponent(id)}`);
+  const response = await requestFromPool(PIPED_INSTANCES, `/streams/${encodeURIComponent(id)}`, {}, "Piped");
   const data = response.data || {};
   const streams = Array.isArray(data.audioStreams) ? data.audioStreams : [];
   const candidates = streams
