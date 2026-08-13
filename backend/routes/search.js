@@ -1,11 +1,10 @@
 import express from "express";
 import { query, validationResult } from "express-validator";
-import metadataClient from "../services/metadataClient.js";
 import cache from "../services/cache.js";
-import { searchYouTube } from "../services/youtubeSearch.js";
 import { searchPiped } from "../services/providers/piped.js";
 
 const router = express.Router();
+const CACHE_TTL = 300;
 
 router.get(
   "/",
@@ -20,42 +19,25 @@ router.get(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const queryStr = String(req.query.q).trim();
-    const cacheKey = `search:${queryStr.toLowerCase()}`;
+    const cacheKey = `search:piped:${queryStr.toLowerCase()}`;
     const cachedData = cache.get(cacheKey);
     if (cachedData) return res.json(cachedData);
 
-    // YTMusic remains the preferred metadata source when it is healthy.
-    try {
-      console.log(`[Search] YTMusic search: ${queryStr}`);
-      const response = await metadataClient.get("/search", { params: { q: queryStr }, timeout: 6000 });
-      const data = Array.isArray(response.data) ? response.data : [];
-      if (data.length) {
-        cache.set(cacheKey, data);
-        return res.json(data);
-      }
-    } catch (err) {
-      console.warn(`[Search] YTMusic unavailable (${err.response?.status || err.message}); trying Piped.`);
-    }
-
-    // Piped is the primary datacenter-safe fallback: it returns YouTube search
-    // metadata without requiring browser cookies on this Render instance.
+    // Piped is the canonical live-search provider. Do not wait for the
+    // rate-limited Python/YTMusic service before returning search results.
     try {
       const data = await searchPiped(queryStr, 20);
       if (data.length) {
-        cache.set(cacheKey, data, 300);
+        cache.set(cacheKey, data, CACHE_TTL);
         return res.json(data);
       }
-    } catch (err) {
-      console.warn(`[Search] Piped unavailable (${err.response?.status || err.message}); trying yt-dlp.`);
-    }
 
-    try {
-      const data = await searchYouTube(queryStr, 20);
-      cache.set(cacheKey, data, 120);
-      return res.json(data);
-    } catch (fallbackErr) {
-      console.error(`[Search] All live search providers failed: ${fallbackErr.message}`);
-      return res.status(502).json({ error: "Live search is temporarily unavailable. Please retry shortly." });
+      return res.status(404).json({ error: "No music results found." });
+    } catch (err) {
+      console.error(`[Search] Piped search failed: ${err.response?.status || err.code || err.message}`);
+      return res.status(502).json({
+        error: "Live search is temporarily unavailable. Please retry shortly.",
+      });
     }
   },
 );
