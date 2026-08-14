@@ -14,7 +14,7 @@ async function fetchTags(videoId) {
 
 const rawDownloadDir = process.env.DOWNLOAD_DIR || "downloads";
 const DOWNLOAD_DIR = path.isAbsolute(rawDownloadDir) ? rawDownloadDir : path.join(process.cwd(), rawDownloadDir);
-const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "3", 10);
+const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "1", 10);
 
 console.log(`[Worker] Initializing download worker. Max concurrency: ${MAX_CONCURRENT_JOBS}`);
 console.log(`[Worker] Target downloads directory: ${DOWNLOAD_DIR}`);
