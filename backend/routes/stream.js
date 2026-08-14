@@ -3,7 +3,8 @@ import fs from "fs";
 import axios from "axios";
 import { param, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
-import { resolveAudioSource } from "../services/sourceResolver.js";
+import { resolveAudioSourceDetailed } from "../services/sourceResolver.js";
+import { getCached } from "../services/cache.js";
 import { spawnYtDlp } from "../services/ytdlpSpawn.js";
 import { getYoutubeCookiesPath } from "../services/cookieManager.js";
 
@@ -33,22 +34,29 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
   const { videoId } = req.params;
+  const providersTried = ["audius", "piped", "yt-dlp"];
 
   try {
-    const metadataResponse = await metadataClient.get(`/song/${videoId}`);
-    const source = await resolveAudioSource(metadataResponse.data);
+    let metadata;
+    try {
+      metadata = (await metadataClient.get(`/song/${videoId}`, { timeout: 2000 })).data;
+    } catch {
+      metadata = getCached(`song:${videoId}`);
+    }
+    const result = await resolveAudioSourceDetailed(metadata || { videoId });
+    const source = result.source;
     if (source?.streamUrl) {
-      console.log(`[Audio Stream] Resolved ${videoId} to ${source.provider}:${source.providerId} score=${source.matchScore}`);
+      console.log(`[Playback] ${source.provider === "audius" ? "Audius success" : "Secondary provider success"} for ${videoId}`);
       return await proxyExternalAudio(source, req, res);
     }
   } catch (error) {
-    console.warn(`[Audio Stream] Independent source resolution failed for ${videoId}: ${error.message}`);
+    console.warn(`[Playback] Independent source resolution failed for ${videoId}: ${error.message}`);
   }
 
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const cookiesPath = getYoutubeCookiesPath();
   const cookiesAvailable = !!(cookiesPath && fs.existsSync(cookiesPath));
-  console.log(`[Audio Stream] No independent source for ${videoId}; YouTube fallback cookies=${cookiesAvailable}`);
+  console.log(`[Playback] Falling back to yt-dlp for ${videoId}; cookiesAvailable=${cookiesAvailable}`);
 
   let child = null;
   let firstChunkReceived = false;
@@ -78,11 +86,17 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
     child.on("close", (code) => {
       const authFailure = /sign in to confirm|cookies? (are )?(no longer )?valid|authentication needs to be refreshed|not a bot/i.test(extractionError);
       if (!firstChunkReceived && !res.headersSent && cookiesAvailable && !retriedWithoutCookies && authFailure) { retriedWithoutCookies = true; console.warn(`[Audio Stream] Authenticated YouTube extraction failed; retrying without cookies.`); return start(false); }
-      if (!firstChunkReceived && !res.headersSent) return res.status(502).json({ error: authFailure ? "No independent audio source matched and YouTube authentication/fallback also failed." : "No compatible audio source is currently available for this song." });
+      if (!firstChunkReceived && !res.headersSent) return res.status(503).json({
+        success: false,
+        reason: "NO_PLAYABLE_SOURCE",
+        providersTried,
+        diagnostics: { authenticationRequired: authFailure, extractionExitCode: code },
+        error: "Playback unavailable for this track.",
+      });
       if (!res.writableEnded) res.end();
       console.log(`[Audio Stream] YouTube fallback exited ${code}; firstChunk=${firstChunkReceived}`);
     });
-    child.on("error", (err) => { console.error(`[Audio Stream] yt-dlp spawn error: ${err.message}`); if (!res.headersSent) res.status(500).json({ error: "Failed to stream audio" }); });
+    child.on("error", (err) => { console.error(`[Playback] yt-dlp spawn error: ${err.message}`); if (!res.headersSent) res.status(503).json({ success: false, reason: "NO_PLAYABLE_SOURCE", providersTried, error: "Playback unavailable for this track." }); });
   };
 
   start(cookiesAvailable);

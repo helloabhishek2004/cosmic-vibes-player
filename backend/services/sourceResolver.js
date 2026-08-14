@@ -27,21 +27,17 @@ export function toCanonicalSong(metadata = {}) {
 }
 
 export async function resolveAudioSource(metadata, { requireDownload = false } = {}) {
+  const result = await resolveAudioSourceDetailed(metadata, { requireDownload });
+  return result.source;
+}
+
+export async function resolveAudioSourceDetailed(metadata, { requireDownload = false } = {}) {
   const song = toCanonicalSong(metadata);
   const providers = [];
+  const diagnostics = [];
 
-  // Piped resolves the exact YouTube video through a public proxy and does not
-  // depend on browser cookies from the Render datacenter. This is the primary
-  // production path for YouTube-backed songs.
-  if (isPipedConfigured() && song.id) {
-    providers.push({
-      name: "piped",
-      resolve: () => resolvePipedSource(song.id),
-    });
-  }
-
-  // Audius is a genuinely independent open-audio catalog. Prefer it when the
-  // metadata matches strongly enough, especially for downloadable releases.
+  // Audius is the first-class independent playback source. It is matched by
+  // title/artist rather than assuming the YouTube video ID exists in Audius.
   if (isAudiusConfigured()) {
     providers.push({
       name: "audius",
@@ -49,16 +45,31 @@ export async function resolveAudioSource(metadata, { requireDownload = false } =
     });
   }
 
+  // Piped remains a secondary exact-video resolver. It is intentionally
+  // optional because public instances can disappear or rate-limit Render.
+  if (isPipedConfigured() && song.id) {
+    providers.push({
+      name: "piped",
+      resolve: () => resolvePipedSource(song.id),
+    });
+  }
+
   for (const provider of providers) {
     try {
       const source = await provider.resolve();
-      if (source && (!requireDownload || source.downloadable)) return source;
+      if (source && (!requireDownload || source.downloadable)) {
+        source.sourceType = source.provider === "audius" ? "audius" : "proxy";
+        source.diagnostics = { providersTried: [...diagnostics.map((item) => item.provider), provider.name], matchScore: source.matchScore || null };
+        return { source, providersTried: [...diagnostics.map((item) => item.provider), provider.name], diagnostics };
+      }
+      diagnostics.push({ provider: provider.name, status: "no_match" });
     } catch (error) {
+      diagnostics.push({ provider: provider.name, status: "error", message: error.message });
       console.warn(`[SourceResolver] ${provider.name} failed: ${error.message}`);
     }
   }
 
-  return null;
+  return { source: null, providersTried: providers.map((provider) => provider.name), diagnostics };
 }
 
 export function getSourceProviderStatus() {
