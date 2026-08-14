@@ -20,7 +20,7 @@ export function DownloadModal({
   const [stage, setStage] = useState<Stage>("queued");
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startDownload = async () => {
     if (!videoId) return;
@@ -34,7 +34,7 @@ export function DownloadModal({
       const response = await client.post("/api/download", {
         videoId,
         title: songTitle,
-      });
+      }, { timeout: 30000 });
 
       const { jobId } = response.data;
       if (!jobId) {
@@ -54,14 +54,14 @@ export function DownloadModal({
   };
 
   const pollStatus = (jobId: string) => {
-    // Clear any existing poll first
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
+    cleanupPoll();
 
-    intervalRef.current = setInterval(async () => {
+    // Use a recursive timeout instead of setInterval(async ...). This keeps
+    // only one status request in flight, even while Render is restarting or
+    // the backend is under load.
+    const poll = async () => {
       try {
-        const response = await client.get(`/api/status/${jobId}`);
+        const response = await client.get(`/api/status/${jobId}`, { timeout: 10000 });
         const { status, progress: jobProgress, error } = response.data;
 
         if (status === "queued") {
@@ -78,17 +78,27 @@ export function DownloadModal({
         } else if (status === "failed") {
           cleanupPoll();
           handleFailure(error || "Conversion failed.");
+        } else if (status === "queued" || status === "processing") {
+          pollTimeoutRef.current = setTimeout(poll, 1500);
+        } else {
+          cleanupPoll();
+          handleFailure("Download returned an unknown job state.");
         }
       } catch (err) {
         console.error("[Frontend] Polling status failed:", err);
+        // Transient timeouts should not create parallel requests or lose the
+        // job. Retry with a slightly slower cadence.
+        pollTimeoutRef.current = setTimeout(poll, 3000);
       }
-    }, 1500);
+    };
+
+    poll();
   };
 
   const triggerFileDownload = async (jobId: string) => {
     try {
       console.log(`[Frontend] Triggering file transmission for job: ${jobId}`);
-      const res = await client.get(`/api/file/${jobId}`, { responseType: "blob" });
+      const res = await client.get(`/api/file/${jobId}`, { responseType: "blob", timeout: 120000 });
       const url = window.URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;
@@ -129,9 +139,9 @@ export function DownloadModal({
   };
 
   const cleanupPoll = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
     }
   };
 
