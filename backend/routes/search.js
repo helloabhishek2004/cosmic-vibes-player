@@ -1,11 +1,13 @@
 import express from "express";
 import { query, validationResult } from "express-validator";
-import cache from "../services/cache.js";
+import { getCached, getStaleCached, setCached } from "../services/cache.js";
 import { searchPiped } from "../services/providers/piped.js";
 import metadataClient from "../services/metadataClient.js";
 
 const router = express.Router();
 const CACHE_TTL = 300;
+const METADATA_TIMEOUT = 2000;
+let metadataBlockedUntil = 0;
 
 router.get(
   "/",
@@ -20,42 +22,36 @@ router.get(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const queryStr = String(req.query.q).trim();
-    const cacheKey = `search:piped:${queryStr.toLowerCase()}`;
-    const cachedData = cache.get(cacheKey);
+    const cacheKey = `search:${queryStr.toLowerCase()}`;
+    const cachedData = getCached(cacheKey);
     if (cachedData) return res.json(cachedData);
 
-    // Piped is the canonical live-search provider. Do not wait for the
-    // rate-limited Python/YTMusic service before returning search results.
+    // YTMusic is canonical. Public proxy providers are only a bounded fallback.
     try {
-      const data = await searchPiped(queryStr, 20);
+      if (Date.now() < metadataBlockedUntil) throw new Error("metadata circuit open");
+      const metadataRes = await metadataClient.get(`/search`, { params: { q: queryStr }, timeout: METADATA_TIMEOUT });
+      const data = Array.isArray(metadataRes.data) ? metadataRes.data.filter((item) => item?.videoId && item?.title) : [];
       if (data.length) {
-        cache.set(cacheKey, data, CACHE_TTL);
+        setCached(cacheKey, data, CACHE_TTL);
         return res.json(data);
       }
-
-      return res.status(404).json({ error: "No music results found." });
+      throw new Error("metadata returned no valid results");
     } catch (err) {
-      console.warn(`[Search] Piped failed, attempting metadata fallback...`);
+      metadataBlockedUntil = Date.now() + 30_000;
+      console.warn(`[Search] YTMusic unavailable; using bounded Piped/Invidious fallback: ${err.message}`);
 
       try {
-        const metadataRes = await metadataClient.get(`/search`, {
-          params: { q: queryStr },
-        });
-
-        const data = metadataRes.data;
+        const data = (await searchPiped(queryStr, 20)).filter((item) => item?.videoId && item?.title);
         if (data && data.length) {
-          console.log("[Search] Metadata fallback succeeded");
-          cache.set(cacheKey, data, CACHE_TTL);
+          setCached(cacheKey, data, CACHE_TTL);
           return res.json(data);
         }
-
-        return res.status(404).json({ error: "No music results found." });
       } catch (fallbackErr) {
-        console.error(`[Search] Metadata fallback failed: ${fallbackErr.response?.status || fallbackErr.code || fallbackErr.message}`);
-        return res.status(502).json({
-          error: "Live search is temporarily unavailable. Please retry shortly.",
-        });
+        console.error(`[Search] fallback failed: ${fallbackErr.response?.status || fallbackErr.code || fallbackErr.message}`);
       }
+      const stale = getStaleCached(cacheKey);
+      if (stale) return res.json(stale);
+      return res.status(502).json({ error: "Live search is temporarily unavailable. Please retry shortly." });
     }
   },
 );

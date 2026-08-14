@@ -23,8 +23,10 @@ const INVIDIOUS_INSTANCES = [
   "https://invidious.tiekoetter.com",
 ];
 
-const TIMEOUT_MS = Number(process.env.PIPED_TIMEOUT_MS || 7000);
+const TIMEOUT_MS = Number(process.env.PIPED_TIMEOUT_MS || 2000);
 const MAX_LIMIT = 20;
+const CIRCUIT_COOLDOWN_MS = 60_000;
+const failures = new Map();
 
 function normalize(value = "") {
   return String(value).toLowerCase().replace(/\s+/g, " ").trim();
@@ -49,15 +51,19 @@ function limitValue(limit) {
 async function requestFromPool(instances, path, params = {}, label = "Provider") {
   let lastError = null;
   for (const base of instances) {
+    const blockedUntil = failures.get(base) || 0;
+    if (blockedUntil > Date.now()) continue;
     try {
       const response = await axios.get(`${base}${path}`, {
         params,
         timeout: TIMEOUT_MS,
         headers: { Accept: "application/json", "User-Agent": "CosmicVibes/1.0" },
       });
+      failures.delete(base);
       return { data: response.data, base };
     } catch (error) {
       lastError = error;
+      failures.set(base, Date.now() + CIRCUIT_COOLDOWN_MS);
       console.warn(`[${label}] ${base} failed for ${path}: ${error.response?.status || error.code || error.message}`);
     }
   }
@@ -200,6 +206,8 @@ export async function resolvePipedSource(videoId) {
     durationSeconds: Number(data.duration) || 0,
     thumbnailUrl: data.thumbnailUrl || "",
     mimeType: best.mimeType || (String(best.format).toUpperCase() === "M4A" ? "audio/mp4" : "audio/webm"),
+    bitrate: Number(best.bitrate) || null,
+    expiresAt: best.expiresInSeconds ? new Date(Date.now() + Number(best.expiresInSeconds) * 1000).toISOString() : null,
     streamUrl: best.url,
     downloadable: true,
     license: null,

@@ -60,6 +60,8 @@ _CACHE_TTL = 300
 _BACKOFF_SECONDS = 30
 _rate_limited_until = 0.0
 _rate_limit_lock = threading.Lock()
+_last_success_at = 0.0
+_last_error = ""
 
 
 def cached_get(key):
@@ -148,14 +150,18 @@ def map_search_results(items, limit=20):
 def health():
     return {
         "status": "ok",
+        "provider": "ytmusic",
         "ytmusicInitialized": yt is not None,
+        "authenticated": bool(os.environ.get(YTMUSIC_AUTH_ENV, "").strip()),
         "browserAuthConfigured": bool(os.environ.get(YTMUSIC_AUTH_ENV, "").strip()),
         "rateLimited": check_rate_limit(),
+        "cacheStatus": {"entries": len(_cache), "lastSuccessAt": _last_success_at or None, "lastError": _last_error or None},
     }
 
 
 @app.get("/search")
 def search(q: str = Query(..., min_length=1)):
+    global _last_success_at, _last_error
     if not yt:
         raise HTTPException(status_code=503, detail="YTMusic client not initialized")
 
@@ -173,18 +179,23 @@ def search(q: str = Query(..., min_length=1)):
         results = yt.search(normalized, filter="songs", limit=20)
         mapped = map_search_results(results or [], 20)
         cached_set(cache_key, mapped)
+        _last_success_at = time.time()
+        _last_error = ""
         return mapped
     except Exception as e:
         message = str(e)
         logger.error("Search API error: %s", message)
         if "429" in message or "Too Many Requests" in message:
             mark_rate_limited()
+        _last_error = message
+        if "429" in message or "Too Many Requests" in message:
             raise HTTPException(status_code=429, detail="YouTube Music rate limit reached; retry shortly")
         return []
 
 
 @app.get("/trending")
 def trending(country: str = Query("US", min_length=2, max_length=2)):
+    global _last_success_at, _last_error
     if not yt:
         raise HTTPException(status_code=503, detail="YTMusic client not initialized")
 
@@ -212,18 +223,23 @@ def trending(country: str = Query("US", min_length=2, max_length=2)):
         tracks = playlist.get("tracks") or []
         mapped = map_search_results(tracks, 20)
         cached_set(cache_key, mapped, ttl=600)
+        _last_success_at = time.time()
+        _last_error = ""
         return mapped
     except Exception as e:
         message = str(e)
         logger.error("Trending API error: %s", message)
         if "429" in message or "Too Many Requests" in message:
             mark_rate_limited()
+        _last_error = message
+        if "429" in message or "Too Many Requests" in message:
             raise HTTPException(status_code=429, detail="YouTube Music rate limit reached; retry shortly")
         return []
 
 
 @app.get("/song/{video_id}")
 def get_song(video_id: str):
+    global _last_success_at, _last_error
     if not yt:
         raise HTTPException(status_code=503, detail="YTMusic client not initialized")
 
@@ -308,6 +324,8 @@ def get_song(video_id: str):
             "year": year,
         }
         cached_set(cache_key, result, ttl=900)
+        _last_success_at = time.time()
+        _last_error = ""
         return result
 
     except HTTPException:
@@ -317,6 +335,8 @@ def get_song(video_id: str):
         logger.error("Error fetching song %s: %s", video_id, message)
         if "429" in message or "Too Many Requests" in message:
             mark_rate_limited()
+        _last_error = message
+        if "429" in message or "Too Many Requests" in message:
             raise HTTPException(status_code=429, detail="YouTube Music rate limit reached; retry shortly")
         raise HTTPException(status_code=500, detail=message)
 

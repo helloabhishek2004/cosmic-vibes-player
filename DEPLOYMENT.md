@@ -78,11 +78,12 @@ The backend runs Express, handles download queues, runs the download worker (yt-
    - `QUEUE_MODE`: `local` _(default for Free tier; automatically falls back if Redis is not configured)_
    - `DOWNLOAD_DIR`: `downloads`
    - `METADATA_SERVICE_URL`: `https://cosmic-vibes-metadata.onrender.com` _(use your actual URL from Step 1)_
-   - `FRONTEND_URL`: `https://cosmic-vibes-player.vercel.app` _(use your actual Vercel URL)_
+   - `FRONTEND_URL`: `https://duamp3.vercel.app` _(active production frontend)_
    - `MAX_CONCURRENT_JOBS`: `2` _(limits concurrent downloads to prevent Free Tier Out-Of-Memory)_
    - `MAX_VIDEO_DURATION_MINUTES`: `20` _(prevents long downloads)_
    - `DOWNLOAD_RATE_LIMIT`: `10M` _(limits download speed to 10MB/s per stream)_
-   - `REDIS_URL`: _(Leave blank to run in local-queue mode. Set to Upstash/Render Redis URL if QUEUE_MODE=redis)_
+   - `REDIS_URL`: _(Optional. Leave blank for local-queue mode.)_
+   - `YOUTUBE_COOKIES`: _(Optional Netscape-format cookies for yt-dlp fallback; never commit or log this value.)_
 6. Click **Deploy Web Service**.
 7. Copy your backend URL (e.g., `https://cosmic-vibes-backend.onrender.com`).
 
@@ -105,7 +106,14 @@ The frontend is a React application built with Vite and Tailwind.
 5. Add the following environment variable:
    - `VITE_API_URL`: `https://cosmic-vibes-backend.onrender.com` _(use your backend API URL from Step 2)_
 6. Click **Deploy**.
-7. Once deployed, take the frontend URL (e.g., `https://cosmic-vibes-player.vercel.app`) and update the `FRONTEND_URL` environment variable on your Render backend service, then trigger a redeploy of the backend.
+7. The active frontend URL is `https://duamp3.vercel.app`; keep the backend `FRONTEND_URL` aligned with it.
+
+### Provider priority
+
+Discovery uses the Python YTMusic service first, with short timeouts and stale
+cache fallback. Piped and Invidious are secondary providers only. Playback and
+downloads prefer verified independent audio sources, then use yt-dlp as a
+fallback.
 
 ---
 

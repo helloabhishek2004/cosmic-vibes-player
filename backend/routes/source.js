@@ -29,7 +29,13 @@ router.get(
         });
       }
 
-      return res.json(source);
+      return res.json({
+        sourceType: source.provider === "audius" ? "open-audio" : "proxy",
+        provider: source.provider,
+        bitrate: source.bitrate || null,
+        expiresAt: source.expiresAt || null,
+        ...source,
+      });
     } catch (error) {
       console.error(`[Source API] ${error.message}`);
       return res.status(502).json({ error: "Audio source resolution failed" });

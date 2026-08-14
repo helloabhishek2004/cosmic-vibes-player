@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Song } from "@/types/song";
+import { recordPlayback } from "@/lib/recommendations";
 
 export type PlaybackStatus = "loading" | "playing" | "idle" | "error";
 type StoreListener = () => void;
@@ -9,6 +10,7 @@ let queue: Song[] = [];
 let queueIndex = -1;
 let status: PlaybackStatus = "idle";
 let errorDetails: { code: string; message: string; videoId: string } | null = null;
+let sessionRecordedTrack = "";
 const listeners = new Set<StoreListener>();
 
 function currentTrack(): Song | null {
@@ -20,13 +22,26 @@ function ensureAudio() {
   if (!audio && typeof window !== "undefined") {
     audio = new Audio();
     audio.preload = "none";
-    audio.addEventListener("playing", () => { status = "playing"; errorDetails = null; emit(); });
+    audio.addEventListener("playing", () => {
+      status = "playing"; errorDetails = null;
+      const track = currentTrack();
+      if (track && sessionRecordedTrack !== track.id) { sessionRecordedTrack = track.id; recordPlayback(track, "play", audio?.currentTime || 0); }
+      emit();
+    });
     audio.addEventListener("waiting", () => { status = "loading"; emit(); });
     audio.addEventListener("ended", () => {
+      const track = currentTrack();
+      if (track) recordPlayback(track, "complete", audio?.duration || 0);
       if (queueIndex < queue.length - 1) playIndex(queueIndex + 1);
       else { status = "idle"; emit(); }
     });
-    audio.addEventListener("pause", () => { if (status !== "loading" && status !== "error") { status = "idle"; emit(); } });
+    audio.addEventListener("pause", () => {
+      if (status !== "loading" && status !== "error") {
+        const track = currentTrack();
+        if (track && (audio?.currentTime || 0) < 3 && (audio?.duration || 0) > 0) recordPlayback(track, "skip", audio?.currentTime || 0);
+        status = "idle"; emit();
+      }
+    });
     audio.addEventListener("seeking", emit);
     audio.addEventListener("seeked", emit);
     audio.addEventListener("error", () => {
@@ -51,6 +66,7 @@ function playIndex(index: number) {
   a.pause();
   a.src = track.previewUrl;
   queueIndex = index;
+  sessionRecordedTrack = "";
   status = "loading";
   errorDetails = null;
   emit();
