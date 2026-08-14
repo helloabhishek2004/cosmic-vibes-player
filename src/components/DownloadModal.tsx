@@ -86,6 +86,12 @@ export function DownloadModal({
         }
       } catch (err) {
         console.error("[Frontend] Polling status failed:", err);
+        const statusCode = (err as { response?: { status?: number } }).response?.status;
+        if (statusCode === 404) {
+          cleanupPoll();
+          handleFailure("Download job expired during a server restart. Please retry.");
+          return;
+        }
         // Transient timeouts should not create parallel requests or lose the
         // job. Retry with a slightly slower cadence.
         pollTimeoutRef.current = setTimeout(poll, 3000);
