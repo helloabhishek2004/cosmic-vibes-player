@@ -1,52 +1,17 @@
-# Use Node 22: current yt-dlp EJS components require Node 22+ for
-# challenge/signature solving (Node 20 can leave YouTube with image-only formats).
-FROM node:22-bookworm-slim
+FROM python:3.12-slim
 
-# Install system dependencies: Python 3.11, pip, and FFmpeg.
-# Node 22 is used by yt-dlp as its JavaScript runtime for YouTube EJS challenges.
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    ffmpeg \
+ARG NODE_VERSION=22.16.0
+RUN apt-get update && apt-get install -y --no-install-recommends curl git xz-utils \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+      | tar -xJ --strip-components=1 -C /usr/local \
     && rm -rf /var/lib/apt/lists/*
-
-# Install yt-dlp with its default extras, including yt-dlp-ejs.
-# YouTube now requires an external JavaScript runtime for full extraction support.
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]"
-
-# Verify the critical media/extraction dependencies during the image build.
-RUN ffmpeg -version && \
-    ffprobe -version && \
-    node --version && \
-    python3 --version && \
-    python3 -m yt_dlp --version && \
-    python3 -m yt_dlp --js-runtimes node --version
-
-# Pre-fetch EJS challenge solver component for yt-dlp
-RUN python3 -m yt_dlp --js-runtimes node --remote-components ejs:github --version
-
-# Set working directory
-WORKDIR /usr/src/app
-
-# Copy package manifests
-COPY package*.json ./
-
-# Install npm dependencies (production only)
-RUN npm ci --omit=dev
-
-# Copy the rest of the application files
-COPY . .
-
-# Create the downloads directory
-RUN mkdir -p downloads && chmod 777 downloads
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=3001
-ENV DOWNLOAD_DIR=downloads
-
-# Expose the API port
-EXPOSE 3001
-
-# Run the server
-CMD ["node", "server.js"]
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN git clone --depth 1 --branch 1.3.1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil \
+    && cd /opt/bgutil/server && npm ci && npx tsc
+COPY main.py resolver.py search.py start.sh ./
+RUN chmod +x start.sh
+ENV PORT=8000
+EXPOSE 8000
+CMD ["./start.sh"]
