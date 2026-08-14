@@ -19,7 +19,7 @@ Install these before you start:
 
 - **Node.js** 18+ (20+ recommended)
 - **Python** 3.10+
-- **Redis** — required for download jobs ([Memurai](https://www.memurai.com/) on Windows, or Redis via WSL/Docker)
+- **Redis** — optional. Render free tier uses an in-memory queue fallback; Redis adds durable jobs for multi-instance deployments.
 - **yt-dlp** — extracts audio from YouTube
 - **ffmpeg** — required for converting audio to MP3 and embedding metadata/cover art
 
@@ -129,10 +129,11 @@ Open the URL Vite prints (usually **http://localhost:5173**). The `--host` flag 
 | --------------------- | ------------------------ | ------------------------ |
 | `PORT`                | `3001`                   | Express API port         |
 | `METADATA_SERVICE_URL`  | `https://cosmic-vibes-metadata.onrender.com`  | Metadata microservice    |
-| `REDIS_URL`           | `redis://localhost:6379` | Bull queue / Redis       |
+| `REDIS_URL`           | (unset on Render) | Optional Bull queue / Redis       |
 | `DOWNLOAD_DIR`        | `downloads`              | Folder for finished MP3s |
 | `MAX_CONCURRENT_JOBS` | `3`                      | Parallel yt-dlp jobs     |
 | `NODE_ENV`            | `development`            | Node environment         |
+| `QUEUE_MODE`          | `local` on Render        | `local` or `redis` queue mode |
 
 ### Frontend (optional)
 
@@ -261,8 +262,8 @@ More backend detail (Windows Redis notes, PM2 commands): see [backend/README.md]
 
 ## Troubleshooting
 
-- **Downloads never start** — Redis must be running and reachable at `REDIS_URL`. Check the backend terminal for `[Redis]` messages.
-- **Search fails** — Ensure the Python service is up on port `8001` (`python -m uvicorn metadata:app --port 8001`).
+- **Downloads never start** — Local queue mode does not require Redis. Check `/api/system/health`; failures usually mean no source matched or YouTube extraction was blocked.
+- **Search fails** — Check the Python metadata health endpoint. YTMusic is primary; public Piped/Invidious instances are bounded fallbacks only.
 - **Download errors** — Install or update yt-dlp: `pip install -U yt-dlp`.
 - **Frontend can’t reach API** — Confirm Express is on port `3001` and set `VITE_API_URL` if needed.
 

@@ -1,11 +1,13 @@
 import path from "path";
 import fs from "fs";
 import { downloadResolvedSource } from "./sourceDownloader.js";
+import { downloadAudio } from "./ytdlp.js";
 import metadataClient from "./metadataClient.js";
 
 const rawDownloadDir = process.env.DOWNLOAD_DIR || "downloads";
 const DOWNLOAD_DIR = path.isAbsolute(rawDownloadDir) ? rawDownloadDir : path.join(process.cwd(), rawDownloadDir);
 const jobs = new Map();
+const activeByVideo = new Map();
 const pendingJobs = [];
 let activeJobsCount = 0;
 const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "2", 10);
@@ -28,8 +30,14 @@ function parseDurationToSeconds(durationStr) {
 export function isLocalJob(jobId) { return jobs.has(String(jobId)); }
 
 export function startLocalJob(videoId, title, initialMetadata = null) {
+  const existingId = activeByVideo.get(videoId);
+  if (existingId) {
+    const existing = jobs.get(existingId);
+    if (existing && ["queued", "processing"].includes(existing.status)) return existingId;
+  }
   const jobId = `local-${Date.now()}-${videoId}`;
   jobs.set(jobId, { videoId, title, status: "queued", progress: 0, error: null, filePath: null, metadata: initialMetadata });
+  activeByVideo.set(videoId, jobId);
   pendingJobs.push(jobId);
   setImmediate(() => processLocalQueue());
   return jobId;
@@ -57,15 +65,10 @@ async function processLocalQueue() {
       if (seconds > MAX_VIDEO_DURATION_MINUTES * 60) throw new Error(`Video exceeds maximum allowed length of ${MAX_VIDEO_DURATION_MINUTES} minutes.`);
     }
 
-    // Production downloads use the independent/open provider pipeline. We do
-    // not silently fall back to YouTube extraction because that path is
-    // datacenter-sensitive and can turn a valid request into a bot-check error.
     const result = await downloadResolvedSource(metadata, DOWNLOAD_DIR, (p) => { job.progress = p; });
-    if (!result?.filePath) {
-      throw new Error("No downloadable independent audio source matched this song.");
-    }
+    const finalPath = result?.filePath || await downloadAudio(job.videoId, DOWNLOAD_DIR, (p) => { job.progress = p; }, metadata);
 
-    job.filePath = result.filePath;
+    job.filePath = finalPath;
     job.status = "done";
     job.progress = 100;
   } catch (err) {
@@ -74,6 +77,7 @@ async function processLocalQueue() {
     console.error(`[LocalJob ${jobId}]`, err);
   } finally {
     activeJobsCount--;
+    if (activeByVideo.get(job.videoId) === jobId) activeByVideo.delete(job.videoId);
     setImmediate(() => processLocalQueue());
   }
 }
@@ -94,5 +98,7 @@ export function getLocalJobFile(jobId) {
 export function deleteLocalJob(jobId) {
   const idx = pendingJobs.indexOf(String(jobId));
   if (idx !== -1) pendingJobs.splice(idx, 1);
+  const job = jobs.get(String(jobId));
+  if (job && activeByVideo.get(job.videoId) === String(jobId)) activeByVideo.delete(job.videoId);
   jobs.delete(String(jobId));
 }

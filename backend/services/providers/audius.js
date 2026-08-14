@@ -126,6 +126,8 @@ export async function resolveAudiusSource(song, { requireDownload = false } = {}
       song.thumbnailUrl ||
       "",
     mimeType: "audio/mpeg",
+    bitrate: Number(best.track.bitrate) || null,
+    expiresAt: null,
     streamUrl: `${API_BASE}/tracks/${encodeURIComponent(best.track.id)}/stream${API_KEY ? `?api_key=${encodeURIComponent(API_KEY)}` : ""}`,
     downloadable: Boolean(best.track.downloadable),
     license: best.track.license || null,

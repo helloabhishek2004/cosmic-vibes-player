@@ -10,6 +10,7 @@ import { stop } from "@/lib/audio-player";
 import { type Song } from "@/types/song";
 import client from "@/api/client";
 import { mapApiTracks } from "@/lib/map-song";
+import { getRecentlyPlayed, rankLocalRecommendations, type HistoryEntry } from "@/lib/recommendations";
 
 const SEARCH_DEBOUNCE_MS = 400;
 const MIN_SEARCH_LENGTH = 2;
@@ -36,6 +37,7 @@ function Home() {
   const [downloadFor, setDownloadFor] = useState<Song | null>(null);
   const [searchError, setSearchError] = useState("");
   const [trendingError, setTrendingError] = useState("");
+  const [recent, setRecent] = useState<HistoryEntry[]>([]);
   const searchAbort = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -44,6 +46,13 @@ function Home() {
   const displayLoading = isSearching ? loading : trendingLoading;
 
   useEffect(() => () => stop(), []);
+
+  useEffect(() => {
+    const refresh = () => setRecent(getRecentlyPlayed());
+    refresh();
+    window.addEventListener("dua:history", refresh);
+    return () => window.removeEventListener("dua:history", refresh);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -191,6 +200,18 @@ function Home() {
               <p className="mt-4 text-center text-sm text-muted-foreground">{isSearching ? searchError : trendingError}</p>
             )}
           </motion.section>
+          {!isSearching && recent.length > 0 && (
+            <section className="mt-12" aria-label="Recently played">
+              <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">Recently Played</h2>
+              <LazySongGrid songs={recent.slice(0, 6)} loading={false} onDownload={setDownloadFor} playlist={recent} />
+            </section>
+          )}
+          {!isSearching && trending.length > 0 && (
+            <section className="mt-12" aria-label="Made for you">
+              <h2 className="text-sm uppercase tracking-widest text-muted-foreground mb-5">Made For You</h2>
+              <LazySongGrid songs={rankLocalRecommendations(trending).slice(0, 6)} loading={false} onDownload={setDownloadFor} playlist={trending} />
+            </section>
+          )}
         </div>
       </main>
 

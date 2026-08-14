@@ -1,48 +1,44 @@
 import express from "express";
-import cache from "../services/cache.js";
+import { getCached, getStaleCached, setCached } from "../services/cache.js";
 import { requestPipedTrending } from "../services/providers/piped.js";
 import metadataClient from "../services/metadataClient.js";
 
 const router = express.Router();
 const CACHE_TTL = 600;
+const METADATA_TIMEOUT = 2000;
+let metadataBlockedUntil = 0;
 
 router.get("/", async (req, res) => {
   const country = String(req.query.country || "IN").toUpperCase();
-  const cacheKey = `trending:piped:${country}`;
-  const cached = cache.get(cacheKey);
+  const cacheKey = `trending:${country}`;
+  const cached = getCached(cacheKey);
   if (cached) return res.json(cached);
 
   try {
-    // Piped is the canonical live recommendation source.
-    const data = await requestPipedTrending(country, 20);
+    if (Date.now() < metadataBlockedUntil) throw new Error("metadata circuit open");
+    const metadataRes = await metadataClient.get(`/trending`, { params: { country }, timeout: METADATA_TIMEOUT });
+    const data = Array.isArray(metadataRes.data) ? metadataRes.data.filter((item) => item?.videoId && item?.title) : [];
     if (data.length) {
-      cache.set(cacheKey, data, CACHE_TTL);
+      setCached(cacheKey, data, CACHE_TTL);
       return res.json(data);
     }
-
-    return res.status(404).json({ error: "No recommendations available." });
+    throw new Error("metadata returned no valid results");
   } catch (err) {
-    console.warn(`[Trending] Piped failed, attempting metadata fallback...`);
+    metadataBlockedUntil = Date.now() + 30_000;
+    console.warn(`[Trending] YTMusic unavailable; using bounded fallback: ${err.message}`);
 
     try {
-      const metadataRes = await metadataClient.get(`/trending`, {
-        params: { country },
-      });
-
-      const data = metadataRes.data;
+      const data = (await requestPipedTrending(country, 20)).filter((item) => item?.videoId && item?.title);
       if (data && data.length) {
-        console.log("[Trending] Metadata fallback succeeded");
-        cache.set(cacheKey, data, CACHE_TTL);
+        setCached(cacheKey, data, CACHE_TTL);
         return res.json(data);
       }
-
-      return res.status(404).json({ error: "No recommendations available." });
     } catch (fallbackErr) {
-      console.error(`[Trending] Metadata fallback failed: ${fallbackErr.response?.status || fallbackErr.code || fallbackErr.message}`);
-      return res.status(502).json({
-        error: "Live recommendations are temporarily unavailable.",
-      });
+      console.error(`[Trending] fallback failed: ${fallbackErr.response?.status || fallbackErr.code || fallbackErr.message}`);
     }
+    const stale = getStaleCached(cacheKey);
+    if (stale) return res.json(stale);
+    return res.status(502).json({ error: "Live recommendations are temporarily unavailable." });
   }
 });
 
