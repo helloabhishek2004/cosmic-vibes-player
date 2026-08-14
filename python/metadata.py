@@ -212,16 +212,19 @@ def trending(country: str = Query("US", min_length=2, max_length=2)):
         logger.info("Fetching trending charts for: %s", normalized_country)
         charts = yt.get_charts(normalized_country)
         video_charts = charts.get("videos") or []
-        if not video_charts:
-            return []
+        mapped = []
+        if video_charts:
+            playlist_id = video_charts[0].get("playlistId")
+            if playlist_id:
+                playlist = yt.get_playlist(playlist_id, limit=20)
+                mapped = map_search_results(playlist.get("tracks") or [], 20)
 
-        playlist_id = video_charts[0].get("playlistId")
-        if not playlist_id:
-            return []
-
-        playlist = yt.get_playlist(playlist_id, limit=20)
-        tracks = playlist.get("tracks") or []
-        mapped = map_search_results(tracks, 20)
+        # Some YTMusic chart responses contain a playlist shell without
+        # track-shaped items. Keep Trending Now functional by using the same
+        # first-party catalog search rather than falling through to proxies.
+        if not mapped:
+            logger.warning("YTMusic charts returned no mappable tracks; using catalog fallback")
+            mapped = map_search_results(yt.search("trending music", filter="songs", limit=20) or [], 20)
         cached_set(cache_key, mapped, ttl=600)
         _last_success_at = time.time()
         _last_error = ""
