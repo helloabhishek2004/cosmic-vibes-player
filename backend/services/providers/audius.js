@@ -3,7 +3,7 @@ import axios from "axios";
 const API_BASE = "https://api.audius.co/v1";
 const API_KEY = process.env.AUDIUS_API_KEY || "";
 const BEARER_TOKEN = process.env.AUDIUS_BEARER_TOKEN || "";
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 2000;
 
 function authHeaders() {
   return BEARER_TOKEN ? { Authorization: `Bearer ${BEARER_TOKEN}` } : {};
@@ -108,12 +108,18 @@ export async function resolveAudiusSource(song, { requireDownload = false } = {}
     .sort((a, b) => b.score - a.score);
 
   const best = candidates[0];
-  if (!best || best.score < 0.78) return null;
-  if (best.track.isStreamable === false) return null;
-  if (requireDownload && !best.track.downloadable) return null;
+  if (!best || best.score < 0.78) {
+    console.info(`[Audius] No match for ${song.title} / ${song.artist}`);
+    return null;
+  }
+  if (best.track.isStreamable === false || (requireDownload && !best.track.downloadable)) {
+    console.info(`[Audius] Match unavailable for ${song.title} / ${song.artist}`);
+    return null;
+  }
 
   const artist = best.track.user?.name || song.artist || "Unknown Artist";
-  return {
+  console.info(`[Audius] Match found ${best.track.id} score=${best.score.toFixed(3)}`);
+  const source = {
     provider: "audius",
     providerId: String(best.track.id),
     title: best.track.title,
@@ -134,6 +140,8 @@ export async function resolveAudiusSource(song, { requireDownload = false } = {}
     matchScore: Number(best.score.toFixed(3)),
     sourceUrl: best.track.permalink ? `https://audius.co${best.track.permalink}` : null,
   };
+  console.info(`[Audius] Stream resolved ${best.track.id}`);
+  return source;
 }
 
 export async function getAudiusTrackStreamUrl(trackId) {

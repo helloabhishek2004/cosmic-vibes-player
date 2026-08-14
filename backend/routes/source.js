@@ -1,7 +1,7 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
-import { resolveAudioSource, getSourceProviderStatus } from "../services/sourceResolver.js";
+import { resolveAudioSourceDetailed, getSourceProviderStatus } from "../services/sourceResolver.js";
 
 const router = express.Router();
 
@@ -19,13 +19,15 @@ router.get(
     try {
       const { videoId } = req.params;
       const response = await metadataClient.get(`/song/${videoId}`);
-      const source = await resolveAudioSource(response.data);
+      const result = await resolveAudioSourceDetailed(response.data);
+      const source = result.source;
 
       if (!source) {
         return res.status(404).json({
           error: "No compatible licensed/open audio source was found for this song.",
           videoId,
           providers: getSourceProviderStatus(),
+          diagnostics: result.diagnostics,
         });
       }
 

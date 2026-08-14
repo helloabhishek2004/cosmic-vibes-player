@@ -50,7 +50,7 @@ function ensureAudio() {
       status = "error";
       errorDetails = track ? {
         code: "MEDIA_ERR_SRC_NOT_SUPPORTED",
-        message: "The server could not provide a browser-compatible audio stream.",
+        message: "Playback unavailable for this track.",
         videoId: track.id,
       } : null;
       emit();
@@ -73,7 +73,7 @@ function playIndex(index: number) {
   a.play().catch((err) => {
     console.error("[Player] play() rejected:", err);
     status = "error";
-    errorDetails = { code: "PLAY_REJECTED", message: "The audio stream could not be started.", videoId: track.id };
+    errorDetails = { code: "PLAYBACK_UNAVAILABLE", message: "Playback unavailable for this track.", videoId: track.id };
     emit();
   });
 }
@@ -114,7 +114,7 @@ export function togglePlayPause() {
     a.play().catch((err) => {
       console.error("[Player] retry rejected:", err);
       status = "error";
-      errorDetails = { code: "PLAY_REJECTED", message: "The audio stream could not be started.", videoId: track.id };
+      errorDetails = { code: "PLAYBACK_UNAVAILABLE", message: "Playback unavailable for this track.", videoId: track.id };
       emit();
     });
     return;
