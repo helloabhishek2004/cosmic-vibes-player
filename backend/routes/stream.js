@@ -84,7 +84,7 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
       res.write(data);
     });
     child.on("close", (code) => {
-      const authFailure = /sign in to confirm|cookies? (are )?(no longer )?valid|authentication needs to be refreshed|not a bot/i.test(extractionError);
+      const authFailure = /sign in to confirm|cookies? (are )?(no longer )?valid|authentication needs to be refreshed|not a bot|bot check/i.test(extractionError);
       if (!firstChunkReceived && !res.headersSent && cookiesAvailable && !retriedWithoutCookies && authFailure) { retriedWithoutCookies = true; console.warn(`[Audio Stream] Authenticated YouTube extraction failed; retrying without cookies.`); return start(false); }
       if (!firstChunkReceived && !res.headersSent) return res.status(503).json({
         success: false,
