@@ -1,8 +1,9 @@
-# Use a slim Debian-based Node.js image
-FROM node:20-bookworm-slim
+# Use Node 22: current yt-dlp EJS components require Node 22+ for
+# challenge/signature solving (Node 20 can leave YouTube with image-only formats).
+FROM node:22-bookworm-slim
 
 # Install system dependencies: Python 3.11, pip, and FFmpeg.
-# Node 20 is also used by yt-dlp as its JavaScript runtime for YouTube EJS challenges.
+# Node 22 is used by yt-dlp as its JavaScript runtime for YouTube EJS challenges.
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
