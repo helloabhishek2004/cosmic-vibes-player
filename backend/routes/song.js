@@ -1,6 +1,7 @@
 import express from "express";
 import { param, validationResult } from "express-validator";
 import metadataClient from "../services/metadataClient.js";
+import { getCached } from "../services/cache.js";
 import { getPipedMetadata } from "../services/providers/piped.js";
 import { getYouTubeMetadata } from "../services/youtubeSearch.js";
 
@@ -14,6 +15,9 @@ router.get(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     const { videoId } = req.params;
+
+    const cached = getCached(`song:${videoId}`);
+    if (cached?.videoId && cached?.title && cached.title !== "Unknown Title") return res.json(cached);
 
     try {
       console.log(`[API Call] Fetching song from Python service: ${videoId}`);

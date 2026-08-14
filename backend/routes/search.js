@@ -33,6 +33,7 @@ router.get(
       const data = Array.isArray(metadataRes.data) ? metadataRes.data.filter((item) => item?.videoId && item?.title) : [];
       if (data.length) {
         setCached(cacheKey, data, CACHE_TTL);
+        data.forEach((item) => setCached(`song:${item.videoId}`, item, 900));
         return res.json(data);
       }
       throw new Error("metadata returned no valid results");
@@ -44,6 +45,7 @@ router.get(
         const data = (await searchPiped(queryStr, 20)).filter((item) => item?.videoId && item?.title);
         if (data && data.length) {
           setCached(cacheKey, data, CACHE_TTL);
+          data.forEach((item) => setCached(`song:${item.videoId}`, item, 900));
           return res.json(data);
         }
       } catch (fallbackErr) {
