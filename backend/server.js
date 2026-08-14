@@ -232,6 +232,7 @@ import fileRouter from "./routes/file.js";
 import streamRouter from "./routes/stream.js";
 import trendingRouter from "./routes/trending.js";
 import systemRouter from "./routes/system.js";
+import sourceRouter from "./routes/source.js";
 
 app.use("/api/search", searchRouter);
 app.use("/api/trending", trendingRouter);
@@ -241,6 +242,7 @@ app.use("/api/status", statusRouter);
 app.use("/api/file", fileRouter);
 app.use("/api/stream", streamRouter);
 app.use("/api/system", systemRouter);
+app.use("/api/source", sourceRouter);
 
 // Basic health check route
 app.get("/health", (req, res) => {

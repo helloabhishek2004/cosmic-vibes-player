@@ -18,7 +18,7 @@ router.get(
     try {
       console.log(`[API Call] Fetching song from Python service: ${videoId}`);
       const response = await metadataClient.get(`/song/${videoId}`, { timeout: 2000 });
-      if (response.data?.videoId && response.data?.title) return res.json(response.data);
+      if (response.data?.videoId && response.data?.title && response.data.title !== "Unknown Title") return res.json(response.data);
     } catch (err) {
       console.warn(`[Song] Python metadata unavailable (${err.response?.status || err.message}); using Piped fallback.`);
     }
