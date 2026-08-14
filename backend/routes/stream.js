@@ -63,6 +63,8 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
   let contentTypeSet = false;
   let extractionError = "";
   let retriedWithoutCookies = false;
+  let requestAborted = false;
+  let extractionTimer = null;
 
   const setContentType = (line) => {
     if (contentTypeSet || res.headersSent) return;
@@ -77,6 +79,14 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
     child = spawnYtDlp(buildYoutubeStreamArgs(videoUrl, cookiesPath, useCookies));
     extractionError = "";
     firstChunkReceived = false;
+    if (extractionTimer) clearTimeout(extractionTimer);
+    extractionTimer = setTimeout(() => {
+      if (child && !child.killed) {
+        console.warn(`[Playback] yt-dlp timed out for ${videoId}; terminating child process.`);
+        child.kill("SIGTERM");
+        setTimeout(() => { try { if (child && !child.killed) child.kill("SIGKILL"); } catch {} }, 2000).unref();
+      }
+    }, 45000);
     child.stderr.on("data", (data) => { const text = data.toString(); extractionError += text; console.error(`[Audio Stream stderr] ${text.trim()}`); setContentType(text); });
     child.stdout.on("data", (data) => {
       if (!firstChunkReceived) { firstChunkReceived = true; console.log(`[Audio Stream] First YouTube fallback chunk: ${data.length} bytes`); }
@@ -84,6 +94,8 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
       res.write(data);
     });
     child.on("close", (code) => {
+      if (extractionTimer) { clearTimeout(extractionTimer); extractionTimer = null; }
+      if (requestAborted) return;
       const authFailure = /sign in to confirm|cookies? (are )?(no longer )?valid|authentication needs to be refreshed|not a bot|bot check/i.test(extractionError);
       if (!firstChunkReceived && !res.headersSent && cookiesAvailable && !retriedWithoutCookies && authFailure) { retriedWithoutCookies = true; console.warn(`[Audio Stream] Authenticated YouTube extraction failed; retrying without cookies.`); return start(false); }
       if (!firstChunkReceived && !res.headersSent) return res.status(503).json({
@@ -96,11 +108,17 @@ router.get("/:videoId", [param("videoId").trim().notEmpty().withMessage("Video I
       if (!res.writableEnded) res.end();
       console.log(`[Audio Stream] YouTube fallback exited ${code}; firstChunk=${firstChunkReceived}`);
     });
-    child.on("error", (err) => { console.error(`[Playback] yt-dlp spawn error: ${err.message}`); if (!res.headersSent) res.status(503).json({ success: false, reason: "NO_PLAYABLE_SOURCE", providersTried, error: "Playback unavailable for this track." }); });
+    child.on("error", (err) => { if (extractionTimer) { clearTimeout(extractionTimer); extractionTimer = null; } console.error(`[Playback] yt-dlp spawn error: ${err.message}`); if (!requestAborted && !res.headersSent) res.status(503).json({ success: false, reason: "NO_PLAYABLE_SOURCE", providersTried, error: "Playback unavailable for this track." }); });
   };
 
   start(cookiesAvailable);
-  req.on("close", () => { try { if (child && !child.killed) child.kill(); } catch {} });
+  req.on("close", () => {
+    if (res.writableEnded) return;
+    requestAborted = true;
+    if (extractionTimer) { clearTimeout(extractionTimer); extractionTimer = null; }
+    try { if (child && !child.killed) child.kill("SIGTERM"); } catch {}
+    setTimeout(() => { try { if (child && !child.killed) child.kill("SIGKILL"); } catch {} }, 2000).unref();
+  });
 });
 
 export default router;
