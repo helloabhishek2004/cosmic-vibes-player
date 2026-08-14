@@ -10,7 +10,10 @@ const jobs = new Map();
 const activeByVideo = new Map();
 const pendingJobs = [];
 let activeJobsCount = 0;
-const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "2", 10);
+// A Render starter/free instance can run out of memory when multiple ffmpeg
+// conversions overlap. Queue downloads serially by default; operators can
+// raise this explicitly on a larger instance.
+const MAX_CONCURRENT_JOBS = parseInt(process.env.MAX_CONCURRENT_JOBS || "1", 10);
 const MAX_VIDEO_DURATION_MINUTES = parseInt(process.env.MAX_VIDEO_DURATION_MINUTES || "20", 10);
 
 async function fetchTags(videoId) {

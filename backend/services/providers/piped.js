@@ -23,7 +23,11 @@ const INVIDIOUS_INSTANCES = [
   "https://invidious.tiekoetter.com",
 ];
 
-const TIMEOUT_MS = Number(process.env.PIPED_TIMEOUT_MS || 2000);
+// Public proxy instances are frequently slow or offline. Keep fallback
+// discovery inside the browser's request budget instead of serially waiting
+// on every dead instance.
+const TIMEOUT_MS = Number(process.env.PIPED_TIMEOUT_MS || 800);
+const MAX_PROVIDER_INSTANCES = Math.max(1, Number(process.env.PIPED_MAX_INSTANCES || 4));
 const MAX_LIMIT = 20;
 const CIRCUIT_COOLDOWN_MS = 60_000;
 const failures = new Map();
@@ -50,7 +54,7 @@ function limitValue(limit) {
 
 async function requestFromPool(instances, path, params = {}, label = "Provider") {
   let lastError = null;
-  for (const base of instances) {
+  for (const base of instances.slice(0, MAX_PROVIDER_INSTANCES)) {
     const blockedUntil = failures.get(base) || 0;
     if (blockedUntil > Date.now()) continue;
     try {
